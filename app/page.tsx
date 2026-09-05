@@ -9,6 +9,7 @@ interface Repository {
 	createdAt: string;
 	pushedAt: string;
 	languages: string[];
+	htmlUrl: string;
 }
 
 export default function Home() {
@@ -179,9 +180,14 @@ export default function Home() {
 							className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors space-y-3"
 						>
 							<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-								<h3 className="text-lg font-semibold text-indigo-300">
+								<a
+									href={repo.htmlUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-lg font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-colors"
+								>
 									{repo.name}
-								</h3>
+								</a>
 								<div className="flex gap-4 text-xs text-slate-400">
 									<span>
 										Created: {new Date(repo.createdAt).toLocaleDateString()}
