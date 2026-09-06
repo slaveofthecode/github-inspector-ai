@@ -56,14 +56,30 @@ export async function GET(request: NextRequest) {
 				new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 		);
 
-		// fetch languages for each repo and extract the top 5
+		// 5. Fetch languages for each repository and extract the top 5
 		const reposWithLanguages = await Promise.all(
 			reposData.map(async (repo: IGitHubRepo) => {
-				const languagesResponse = await fetch(repo.languages_url);
-				const languagesData = await languagesResponse.json();
-				const languages = Object.keys(languagesData)
-					.sort((a: string, b: string) => languagesData[b] - languagesData[a])
-					.slice(0, 5);
+				let topLanguages: string[] = [];
+
+				try {
+					// Build clean URL directly using repo owner and name
+					const languagesApiUrl = `https://api.github.com/repos/${username}/${repo.name}/languages`;
+
+					const langResponse = await fetch(languagesApiUrl, { headers });
+
+					if (langResponse.ok) {
+						const languagesData = await langResponse.json();
+
+						// Ensure the response is a languages object and not an error response
+						if (languagesData && !languagesData.message) {
+							topLanguages = Object.keys(languagesData)
+								.sort((a, b) => languagesData[b] - languagesData[a])
+								.slice(0, 5);
+						}
+					}
+				} catch {
+					topLanguages = [];
+				}
 
 				return {
 					id: repo.id,
@@ -71,7 +87,8 @@ export async function GET(request: NextRequest) {
 					description: repo.description,
 					createdAt: repo.created_at,
 					pushedAt: repo.pushed_at,
-					languages: languages,
+					languages: topLanguages,
+					htmlUrl: repo.html_url,
 				};
 			})
 		);
