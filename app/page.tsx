@@ -1,6 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef, FormEvent } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+	Card,
+	CardHeader,
+	CardTitle,
+	CardDescription,
+	CardContent,
+} from '@/components/ui/card';
 
 interface Repository {
 	id: number;
@@ -38,7 +48,6 @@ export default function Home() {
 				}
 				return null;
 			}
-			// If entered plain username
 			const githubUsernameRegex = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 			return githubUsernameRegex.test(trimmed) ? trimmed : null;
 		} catch {
@@ -119,14 +128,14 @@ export default function Home() {
 	const visibleRepos = allRepos.slice(0, visibleCount);
 
 	return (
-		<main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-12 relative">
+		<main className="min-h-screen bg-background text-foreground p-6 md:p-12 relative">
 			<div className="max-w-4xl mx-auto space-y-8">
 				{/* Header */}
 				<header className="text-center space-y-2">
-					<h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-indigo-400">
+					<h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">
 						GitHub Inspector
 					</h1>
-					<p className="text-slate-400 text-sm md:text-base">
+					<p className="text-muted-foreground text-sm md:text-base">
 						Inspect public repositories, technologies, and metadata instantly.
 					</p>
 				</header>
@@ -136,86 +145,98 @@ export default function Home() {
 					onSubmit={handleSearch}
 					className="flex flex-col sm:flex-row gap-3"
 				>
-					<input
+					<Input
 						type="text"
 						placeholder="https://github.com/username or username"
 						value={inputUrl}
 						onChange={(e) => setInputUrl(e.target.value)}
-						className="flex-1 px-4 py-3 bg-slate-900 border border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-100 placeholder-slate-500"
+						className="flex-1"
 					/>
-					<button
-						type="submit"
-						disabled={loading}
-						className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white font-semibold rounded-lg transition-colors cursor-pointer"
-					>
+					<Button type="submit" disabled={loading}>
 						{loading ? 'Searching...' : 'Search'}
-					</button>
+					</Button>
 				</form>
 
 				{/* Error Alert */}
 				{error && (
-					<div className="p-4 bg-red-950/50 border border-red-800 text-red-300 rounded-lg text-sm text-center">
+					<div className="p-4 bg-destructive/15 border border-destructive text-destructive rounded-lg text-sm text-center">
 						{error}
 					</div>
 				)}
 
 				{/* Results Header */}
 				{searchedUser && (
-					<div className="flex items-center justify-between border-b border-slate-800 pb-4">
-						<h2 className="text-xl font-bold text-slate-200">
+					<div className="flex items-center justify-between border-b pb-4">
+						<h2 className="text-xl font-bold">
 							Repositories for{' '}
-							<span className="text-indigo-400">@{searchedUser}</span>
+							<span className="text-primary">@{searchedUser}</span>
 						</h2>
-						<span className="text-xs text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
-							Total: {allRepos.length}
-						</span>
+						<Badge variant="secondary">Total: {allRepos.length}</Badge>
 					</div>
 				)}
 
 				{/* Repositories List */}
 				<div className="space-y-4">
 					{visibleRepos.map((repo) => (
-						<div
+						<Card
 							key={repo.id}
-							className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors space-y-3"
+							className="transition-all hover:border-primary/40 hover:shadow-md bg-card/50 backdrop-blur-sm"
 						>
-							<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-								<a
-									href={repo.htmlUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="text-lg font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-colors"
-								>
-									{repo.name}
-								</a>
-								<div className="flex gap-4 text-xs text-slate-400">
-									<span>
-										Created: {new Date(repo.createdAt).toLocaleDateString()}
-									</span>
-									<span>
-										Last Commit: {new Date(repo.pushedAt).toLocaleDateString()}
-									</span>
-								</div>
-							</div>
+							<CardHeader className="pb-3">
+								<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+									<CardTitle className="text-xl font-bold tracking-tight">
+										<a
+											href={repo.htmlUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="inline-flex items-center gap-1.5 hover:text-primary transition-colors"
+										>
+											{repo.name}
+											<span className="text-xs text-muted-foreground font-normal">
+												↗
+											</span>
+										</a>
+									</CardTitle>
 
-							<p className="text-sm text-slate-300">
-								{repo.description || 'No description provided.'}
-							</p>
+									<div className="flex items-center gap-3 text-xs text-muted-foreground font-mono bg-muted/40 px-2.5 py-1 rounded-md self-start">
+										<span>
+											<strong className="font-semibold text-foreground/70">
+												Created:
+											</strong>{' '}
+											{new Date(repo.createdAt).toLocaleDateString()}
+										</span>
+										<span className="text-muted-foreground/40">•</span>
+										<span>
+											<strong className="font-semibold text-foreground/70">
+												Updated:
+											</strong>{' '}
+											{new Date(repo.pushedAt).toLocaleDateString()}
+										</span>
+									</div>
+								</div>
+
+								<CardDescription className="text-sm leading-relaxed pt-1 text-muted-foreground">
+									{repo.description || 'No description provided.'}
+								</CardDescription>
+							</CardHeader>
 
 							{/* Languages / Technologies */}
 							{repo.languages.length > 0 && (
-								<div className="flex flex-wrap gap-2 pt-2">
-									{repo.languages.map((lang) => (
-										<span
-											key={lang}
-											className="text-xs px-2.5 py-1 bg-slate-800 text-indigo-300 rounded-md border border-slate-700/50"
-										>
-											{lang}
-										</span>
-									))}
-								</div>
+								<CardContent className="pt-0 pb-4">
+									<div className="flex flex-wrap gap-1.5">
+										{repo.languages.map((lang) => (
+											<Badge
+												key={lang}
+												variant="secondary"
+												className="text-xs font-mono font-normal"
+											>
+												{lang}
+											</Badge>
+										))}
+									</div>
+								</CardContent>
 							)}
-						</div>
+						</Card>
 					))}
 				</div>
 
@@ -223,7 +244,7 @@ export default function Home() {
 				{visibleCount < allRepos.length && (
 					<div
 						ref={observerRef}
-						className="py-6 text-center text-slate-500 text-sm"
+						className="py-6 text-center text-muted-foreground text-sm"
 					>
 						Loading more repositories...
 					</div>
@@ -232,13 +253,14 @@ export default function Home() {
 
 			{/* Floating Scroll To Top Button */}
 			{showScrollTop && (
-				<button
+				<Button
 					onClick={scrollToTop}
+					size="icon"
 					aria-label="Scroll to top"
-					className="fixed bottom-6 right-6 p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg transition-all duration-300 z-50 cursor-pointer"
+					className="fixed bottom-6 right-6 rounded-full shadow-lg z-50"
 				>
 					↑
-				</button>
+				</Button>
 			)}
 		</main>
 	);
