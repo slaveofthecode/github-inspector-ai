@@ -1,10 +1,12 @@
-# PLAN.md — Estabilización V1 (paso a paso)
+# PLAN.md — Estabilización V1 + Deploy AWS + Fases IA
 
-> Plan para dejar el proyecto **estable, prolijo y escalable**, listo para la versión con IA.
+> **Parte 1 (pasos 1–8 + docs): COMPLETADA ✅** — proyecto estable, prolijo y escalable.
+> **Parte 2 (al final del archivo): plan activo** — deploy en AWS (App Runner) + fases de IA (IA-1..4).
 > Lo aplica el desarrollador; cada paso explica **qué**, **dónde** y **por qué**.
-> La documentación final (README + GitHub Pages) la genera la IA al terminar los pasos 1–8.
 
 ---
+
+# Parte 1 — Estabilización V1 (completada)
 
 ## Paso 1 — Instalar Zod
 
@@ -273,11 +275,176 @@ Prueba manual:
 
 Cuando el desarrollador confirme que los pasos 1–8 están aplicados y verificados:
 
-- **Paso 9 — `README.md`**: reescritura completa en inglés (qué hace, features, stack, quick start, estructura, API, deploy) + enlace a ROADMAP y al GitHub Pages.
-- **Paso 10 — `docs/index.html`**: página estática self-contained en inglés para GitHub Pages (hero, about, features, stack, how it works, footer con repo/demo/LinkedIn, `og:` tags listas para compartir en LinkedIn). Activar en GitHub → Settings → Pages → `/docs`.
+- **Paso 9 — `README.md`** ✅: reescritura completa en inglés (qué hace, features, stack, quick start, estructura, API, deploy) + enlace a ROADMAP y al GitHub Pages.
+- **Paso 10 — `docs/index.html`** ✅: página estática self-contained en inglés para GitHub Pages (hero, about, features, stack, how it works, footer con repo/demo/LinkedIn, `og:` tags listas para compartir en LinkedIn). Activar en GitHub → Settings → Pages → `/docs`.
+
+✅ Parte 1 verificada: `bun run lint` + `bun run build` OK, bugs encontrados en la prueba manual corregidos (contrato `username`, return en `parseGithubInput`, limpieza de resultados) y publicados (merge fast-forward de `bug/003-ui-and-front-end` a `main`, tip `c6ee21b`; GitHub Pages live).
 
 ---
 
-## Nota para la versión futura (IA)
+## Nota para la migración a Octokit + GraphQL (futura — ROADMAP Fase IA-5)
 
-Octokit + GraphQL quedan **descartados para esta V1** (pocas llamadas, API simple). Se usarán cuando la capa de IA multiplique las llamadas a GitHub (README, archivos de dependencias, etc.) y el problema N+1 (hoy: hasta 101 requests por búsqueda: 1 por repos + 1 por cada repo para lenguajes) deje de ser inocuo. GraphQL convertiría esas 101 peticiones en 1.
+Octokit + GraphQL quedaron **descartados para la V1** (pocas llamadas, API simple). Se usarán cuando la capa de IA (Fases IA-2/IA-3) multiplique las llamadas a GitHub (README, archivos de dependencias, etc.) y el problema N+1 (hoy: hasta 101 requests por búsqueda: 1 por repos + 1 por cada repo para lenguajes) deje de ser inocuo. GraphQL convertiría esas 101 peticiones en 1.
+
+---
+
+# Parte 2 — Deploy AWS + Fases IA (plan activo)
+
+> Punto de partida: V1 estable en `main` (`c6ee21b`). Cada hito publica un **tag de versión** que dispara el deploy en AWS (ver ROADMAP → AWS).
+>
+> **Nota de flujo:** mientras estamos en una fase pueden aparecer bugs o features nuevas. Reglas:
+> 1. Si un bug **bloquea** la fase actual → pausar, arreglarlo y anotarlo aquí como "Bug resuelto (tag)".
+> 2. Si aparece una **feature nueva** → decidir: si es chica entra en la fase en curso; si no, se anota en ROADMAP como hito futuro.
+> 3. **Nunca** mezclar fixes/features ajenos al alcance de la fase en curso: mantiene cada tag/release limpio y auditable.
+
+## Paso AWS-1 — Dockerfile para Next.js standalone
+
+**Archivos:** `Dockerfile` (nuevo) + `next.config.ts` (editar).
+
+Añadir a `next.config.ts`:
+
+```ts
+const nextConfig = {
+  output: "standalone",
+};
+```
+
+**Contenido del `Dockerfile`:**
+
+```dockerfile
+FROM node:20-alpine AS base
+
+FROM base AS deps
+WORKDIR /app
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN bun run build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+> Si `bun` no está disponible en la imagen build, usar la imagen oficial multi-stage con `oven/bun:1` para `deps`/`builder` y `node:20-alpine` para `runner`.
+
+**¿Por qué?**
+- `output: 'standalone'` genera el server Node mínimo (sin `node_modules` de desarrollo): imagen chica y arranque rápido.
+- Es el formato que consumen bien App Runner y (más adelante) ECS Fargate.
+
+## Paso AWS-2 — Deploy inicial en App Runner
+
+**Herramientas:** consola de AWS (primer deploy manual, una sola vez por cuenta).
+
+1. Crear cuenta AWS (la tarjeta de crédito es solo verificación de identidad).
+2. Ir a **App Runner** → *Create service* → source: **GitHub repository** → conectar el repo `github-inspector-ai`.
+3. Build settings: usar el `Dockerfile` (runtime Node; puerto 3000).
+4. Deploy type: **Manual** para la primera versión.
+5. Env vars: `GITHUB_TOKEN` (= tu PAT actual).
+6. Esperar el deploy → URL `https://<id>.awsapprunner.com`. Probar la búsqueda de un usuario real.
+
+**¿Por qué?**
+- App Runner resuelve HTTPS, escala y red por nosotros; sin VPC/ALB que administrar. A bajo tráfico ≈ $0–5/mes.
+- El primer deploy manual valida el Dockerfile antes de automatizar el pipeline.
+
+## Paso AWS-3 — Pipeline de releases por tag (GitHub Actions)
+
+**Archivo nuevo:** `.github/workflows/deploy.yml`.
+
+**Flujo:** al crearse un tag `v*` → build + push de la imagen a **ECR** → actualizar el servicio App Runner con la tag nueva → health check del deployment.
+
+**Pseudo-flujo del workflow:**
+
+```yaml
+name: deploy
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - checkout
+      - build docker image (tag = git tag)
+      - aws ecr push (login con OIDC, sin secretos largos)
+      - app runner start-deployment / update service a la imagen nueva
+      - health check + rollback si falla
+```
+
+**¿Por qué?**
+- Con esto, "publicar una versión" = `git tag v0.2.0 && git push --tags`. Cada fase de IA se despliega sola.
+- El modelo por tag da releases **auditables** (cada versión es reproducible) y rollback trivial al tag anterior.
+- App Runner también soporta auto-deploy por push a `main`; por tag es más controlado.
+
+## Paso IA-1 — Esqueleto de streaming *(tag v0.2.0)*
+
+**Instalar:**
+
+```bash
+bun add ai @ai-sdk/google
+```
+
+**Archivos:**
+- `lib/ai.ts` (nuevo): helper `getGeminiModel()` que instancia el modelo (`google("gemini-2.0-flash")`) leyendo `process.env.GEMINI_API_KEY`; lanza error claro si falta la key.
+- `app/api/analyze/route.ts` (nuevo): `POST` con body `{ owner, repo, sha }`:
+  - Schema Zod para el body (strings no vacías, longitud acotada).
+  - **Anti-SSRF**: los fetches solo van a `api.github.com` y `raw.githubusercontent.com`, nunca a URLs arbitrarias del usuario.
+  - Leer el `README.md` del repo y pasarlo a Gemini con `streamText` → stream de markdown al cliente.
+  - Manejar 404 (repo/README no existe), 403 (privado), 429 (rate limit).
+- `components/repo-analysis.tsx` (nuevo): botón **Analyze** por card que llama al endpoint y renderiza el markdown del stream en vivo (ReactMarkdown + `readDataStream` / helper del AI SDK).
+
+**¿Por qué?**
+- El Vercel AI SDK da **streaming out-of-the-box** y abstrae el provider (cambiar Gemini por otro mañana no toca la UI).
+- IA-1 arranca resumiendo el README; la detección real de CVEs llega en IA-2. Iteración chica y verificable.
+
+## Paso IA-2 — Detección real de vulnerabilidades *(tag v0.3.0)*
+
+**Archivos nuevos:**
+- `lib/manifests.ts`: dado un path + contenido, extraer nombre y versiones de la dependencia. Soportar `package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`, `Gemfile`.
+- `lib/osv.ts`: `queryOSV(deps)` → `POST https://api.osv.dev/v1/querybatch` con todas las dependencias y normalizar el resultado (pkg, ver afectadas, severity, CVEs).
+- `app/api/analyze/route.ts` (editar): listar archivos del repo → bajar los manifests conocidos → parsearlos → `queryOSV` **antes** de llamar al LLM.
+
+**¿Por qué?**
+- OSV.dev es **determinista y gratis** (sin key): los CVEs NUNCA deben venir del LLM (alucina). La IA solo explica/prioriza sobre datos reales.
+- `querybatch` = una sola request para todos los manifests del repo.
+
+## Paso IA-3 — Capa LLM completa *(tag v0.4.0)*
+
+**Archivos:**
+- `lib/ai.ts` (editar): prompt estructurado — recibe el listado real de OSV.dev + contexto del repo → explica impacto real, prioridad y fix sugerido para cada uno.
+- `components/repo-analysis.tsx` (editar): render en 2 fases — lista determinista de CVEs (badges con severity) + análisis narrativo en streaming.
+
+**¿Por qué?**
+- La IA agrega valor **explicando y priorizando**, no inventando vulnerabilidades.
+- El modelo recibe únicamente datos de OSV.dev como fuente de CVEs (prompt hardening).
+
+## Paso IA-4 — Robustez *(tag v0.5.0)*
+
+**Archivos nuevos / edits:**
+- `lib/cache.ts` (nuevo): cache en memoria (o Upstash Redis) con key `owner/repo@sha`; si el repo no cambió, devolver análisis cacheado (TTL).
+- `/api/analyze`: rate-limit por IP (ej. 5/min) + tope de manifests/tamaño + límite de repos por usuario.
+- Manejo de errores en UI: cuota de Gemini agotada, timeout, repo privado, README gigante.
+
+**¿Por qué?**
+- Protege la cuota gratuita de Gemini y el rate limit de GitHub: alguien podría quemar tus tokens a tu costo sin esto.
+- El cache hace re-analizar tu propia carpeta de repos varias órdenes de magnitud más barato.
+
+## Verificación por fase
+
+Cada fase termina con:
+
+```bash
+bun run lint
+bun run build
+```
+
++ deploy **manual** con el tag correspondiente (`v0.2.0`, …) y prueba en App Runner antes de seguir a la siguiente.
