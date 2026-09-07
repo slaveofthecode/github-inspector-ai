@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { parseGithubInput } from '@/lib/validation';
 import {
 	Card,
 	CardHeader,
@@ -11,6 +12,7 @@ import {
 	CardDescription,
 	CardContent,
 } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Repository {
 	id: number;
@@ -20,6 +22,23 @@ interface Repository {
 	pushedAt: string;
 	languages: string[];
 	htmlUrl: string;
+}
+
+function RepoSkeleton() {
+	return (
+		<Card className="space-y-3 p-6">
+			<div className="flex items-center justify-between gap-2">
+				<Skeleton className="h-6 w-1/3" />
+				<Skeleton className="h-4 w-40" />
+			</div>
+			<Skeleton className="h-4 w-full" />
+			<div className="flex gap-2 pt-2">
+				<Skeleton className="h-5 w-16 rounded-full" />
+				<Skeleton className="h-5 w-20 rounded-full" />
+				<Skeleton className="h-5 w-14 rounded-full" />
+			</div>
+		</Card>
+	);
 }
 
 export default function Home() {
@@ -34,32 +53,11 @@ export default function Home() {
 	const [showScrollTop, setShowScrollTop] = useState(false);
 	const observerRef = useRef<HTMLDivElement | null>(null);
 
-	// Helper to extract username from input URL or string
-	const extractUsername = (input: string): string | null => {
-		const trimmed = input.trim();
-		if (!trimmed) return null;
-
-		try {
-			if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-				const url = new URL(trimmed);
-				if (url.hostname.includes('github.com')) {
-					const pathParts = url.pathname.split('/').filter(Boolean);
-					return pathParts[0] || null;
-				}
-				return null;
-			}
-			const githubUsernameRegex = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
-			return githubUsernameRegex.test(trimmed) ? trimmed : null;
-		} catch {
-			return null;
-		}
-	};
-
-	const handleSearch = async (e: FormEvent) => {
+	const handleSearch = async (e: ChangeEvent) => {
 		e.preventDefault();
 		setError(null);
 
-		const username = extractUsername(inputUrl);
+		const username = parseGithubInput(inputUrl);
 
 		if (!username) {
 			setError(
@@ -176,8 +174,14 @@ export default function Home() {
 				)}
 
 				{/* Repositories List */}
-				<div className="space-y-4">
-					{visibleRepos.map((repo) => (
+				{loading ? (
+					<div className="space-y-4">
+						{Array.from({ length: 5 }).map((_, i) => (
+							<RepoSkeleton key={i} />
+						))}
+					</div>
+				) : (
+					visibleRepos.map((repo) => (
 						<Card
 							key={repo.id}
 							className="transition-all hover:border-primary/40 hover:shadow-md bg-card/50 backdrop-blur-sm"
@@ -237,8 +241,8 @@ export default function Home() {
 								</CardContent>
 							)}
 						</Card>
-					))}
-				</div>
+					))
+				)}
 
 				{/* Infinite Scroll Sentinel */}
 				{visibleCount < allRepos.length && (

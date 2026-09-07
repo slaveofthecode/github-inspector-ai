@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { githubUsernameShema } from '@/lib/validation';
 
 interface IGitHubRepo {
 	id: number;
@@ -15,18 +16,34 @@ interface IGitHubRepo {
 
 export async function GET(request: NextRequest) {
 	// get the username from the request
-	const username = request.nextUrl.searchParams.get('username');
-	if (!username) {
+	const usernameParam = request.nextUrl.searchParams.get('username');
+	if (!usernameParam) {
 		return NextResponse.json(
 			{ error: 'Username is required' },
 			{ status: 400 }
 		);
 	}
 
+	const githubUsername = githubUsernameShema.safeParse(usernameParam);
+	if (!githubUsername.success) {
+		return NextResponse.json(
+			{
+				error: 'Invalid GitHub username',
+			},
+			{
+				status: 400,
+			}
+		);
+	}
+	const username = githubUsername.data;
+
 	try {
 		// prepare the headers for the request
 		const headers = new Headers();
-		headers.set('Authorization', `Bearer ${process.env.GITHUB_TOKEN}`);
+
+		if (process.env.GITHUB_TOKEN) {
+			headers.set('Authorization', `Bearer ${process.env.GITHUB_TOKEN}`);
+		}
 		headers.set('Content-Type', 'application/json');
 
 		// fetch the repos from the GitHub API
@@ -94,7 +111,7 @@ export async function GET(request: NextRequest) {
 		);
 
 		return NextResponse.json({
-			username,
+			usernameParsed: username,
 			total: reposWithLanguages.length,
 			repos: reposWithLanguages,
 		});
