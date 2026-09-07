@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, ChangeEvent } from 'react';
+import { useState, useEffect, useRef, SubmitEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,9 +53,13 @@ export default function Home() {
 	const [showScrollTop, setShowScrollTop] = useState(false);
 	const observerRef = useRef<HTMLDivElement | null>(null);
 
-	const handleSearch = async (e: ChangeEvent) => {
+	const handleSearch = async (e: SubmitEvent<HTMLFormElement>) => {
 		e.preventDefault();
+
 		setError(null);
+		setAllRepos([]);
+		setVisibleCount(10);
+		setSearchedUser(null);
 
 		const username = parseGithubInput(inputUrl);
 

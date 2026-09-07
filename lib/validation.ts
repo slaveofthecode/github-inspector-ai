@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const githubUsernameShema = z
+export const githubUsernameSchema = z
 	.string()
 	.trim()
 	.min(1, 'Please enter a GitHub URL or username.')
@@ -9,7 +9,7 @@ export const githubUsernameShema = z
 		"That doesn't look like a valid GitHub username."
 	);
 
-export function parseGithubInput(input: string): string | null | undefined {
+export function parseGithubInput(input: string): string | null {
 	const trimmed = input.trim();
 	if (!trimmed) return null;
 
@@ -19,11 +19,13 @@ export function parseGithubInput(input: string): string | null | undefined {
 			if (!url.hostname.toLowerCase().endsWith('github.com')) return null;
 
 			const [owner] = url.pathname.split('/').filter(Boolean);
-			return owner && githubUsernameShema.safeParse(owner).success
+			return owner && githubUsernameSchema.safeParse(owner).success
 				? owner
 				: null;
 		}
 	} catch {
 		return null;
 	}
+
+	return githubUsernameSchema.safeParse(trimmed).success ? trimmed : null;
 }

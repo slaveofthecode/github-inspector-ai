@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { githubUsernameShema } from '@/lib/validation';
+import { githubUsernameSchema } from '@/lib/validation';
 
 interface IGitHubRepo {
 	id: number;
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 		);
 	}
 
-	const githubUsername = githubUsernameShema.safeParse(usernameParam);
+	const githubUsername = githubUsernameSchema.safeParse(usernameParam);
 	if (!githubUsername.success) {
 		return NextResponse.json(
 			{
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
 		);
 
 		return NextResponse.json({
-			usernameParsed: username,
+			username,
 			total: reposWithLanguages.length,
 			repos: reposWithLanguages,
 		});
