@@ -1,7 +1,7 @@
 # PLAN.md — Estabilización V1 + Deploy AWS + Fases IA
 
 > **Parte 1 (pasos 1–8 + docs): COMPLETADA ✅** — proyecto estable, prolijo y escalable.
-> **Parte 2 (al final del archivo): plan activo** — deploy en AWS (App Runner) + fases de IA (IA-1..4).
+> **Parte 2 (al final del archivo): plan activo** — deploy en AWS (Amplify Hosting) + fases de IA (IA-1..4).
 > Lo aplica el desarrollador; cada paso explica **qué**, **dónde** y **por qué**.
 
 ---
@@ -290,100 +290,52 @@ Octokit + GraphQL quedaron **descartados para la V1** (pocas llamadas, API simpl
 
 # Parte 2 — Deploy AWS + Fases IA (plan activo)
 
-> Punto de partida: V1 estable en `main` (`c6ee21b`). Cada hito publica un **tag de versión** que dispara el deploy en AWS (ver ROADMAP → AWS).
+> Punto de partida: V1 estable en `main`. **Amplify Hosting** despliega automáticamente cada push a `main` (CI/CD por rama, ver ROADMAP → AWS); los tags de versión quedan como registro auditorio.
 >
 > **Nota de flujo:** mientras estamos en una fase pueden aparecer bugs o features nuevas. Reglas:
 > 1. Si un bug **bloquea** la fase actual → pausar, arreglarlo y anotarlo aquí como "Bug resuelto (tag)".
 > 2. Si aparece una **feature nueva** → decidir: si es chica entra en la fase en curso; si no, se anota en ROADMAP como hito futuro.
 > 3. **Nunca** mezclar fixes/features ajenos al alcance de la fase en curso: mantiene cada tag/release limpio y auditable.
 
-## Paso AWS-1 — Dockerfile para Next.js standalone
+## Paso AWS-1 — Conectar el repo en Amplify Hosting
 
-**Archivos:** `Dockerfile` (nuevo) + `next.config.ts` (editar).
-
-Añadir a `next.config.ts`:
-
-```ts
-const nextConfig = {
-  output: "standalone",
-};
-```
-
-**Contenido del `Dockerfile`:**
-
-```dockerfile
-FROM node:20-alpine AS base
-
-FROM base AS deps
-WORKDIR /app
-COPY package.json bun.lock* ./
-RUN bun install --frozen-lockfile
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN bun run build
-
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
-
-> Si `bun` no está disponible en la imagen build, usar la imagen oficial multi-stage con `oven/bun:1` para `deps`/`builder` y `node:20-alpine` para `runner`.
-
-**¿Por qué?**
-- `output: 'standalone'` genera el server Node mínimo (sin `node_modules` de desarrollo): imagen chica y arranque rápido.
-- Es el formato que consumen bien App Runner y (más adelante) ECS Fargate.
-
-## Paso AWS-2 — Deploy inicial en App Runner
-
-**Herramientas:** consola de AWS (primer deploy manual, una sola vez por cuenta).
+**Herramientas:** consola de AWS (primer deploy, una sola vez por cuenta).
 
 1. Crear cuenta AWS (la tarjeta de crédito es solo verificación de identidad).
-2. Ir a **App Runner** → *Create service* → source: **GitHub repository** → conectar el repo `github-inspector-ai`.
-3. Build settings: usar el `Dockerfile` (runtime Node; puerto 3000).
-4. Deploy type: **Manual** para la primera versión.
-5. Env vars: `GITHUB_TOKEN` (= tu PAT actual).
-6. Esperar el deploy → URL `https://<id>.awsapprunner.com`. Probar la búsqueda de un usuario real.
+2. Ir a **Amplify** → *Create app* → source: **GitHub** → conectar el repo `github-inspector-ai`.
+3. Seleccionar la rama `main` como rama de producción (opcional: conectar otras ramas para previews por PR / full-stack environments).
+4. Dejar que Amplify **auto-detecte el framework** → *Next.js — SSR*. No hace falta `amplify.yml` ni `Dockerfile`: los scripts de `package.json` ya son compatibles con `npm`.
+5. Guardar y esperar el primer build → URL `https://<appid>.amplifyapp.com`. Probar la búsqueda de un usuario real.
+
+> **Ojo:** NO añadir `output: 'standalone'` a `next.config.ts` ni crear un `Dockerfile`: Amplify gestiona el SSR de Next.js con el build output por defecto.
 
 **¿Por qué?**
-- App Runner resuelve HTTPS, escala y red por nosotros; sin VPC/ALB que administrar. A bajo tráfico ≈ $0–5/mes.
-- El primer deploy manual valida el Dockerfile antes de automatizar el pipeline.
+- Amplify da HTTPS, escala y CI/CD resueltos dentro del **Free Tier** (~1000 min de build/mes, 5 GB de storage, 15 GB de transferencia).
+- A tráfico de portfolio el costo es ~$0/mes; pasa a pago por uso solo al superar los límites del tier.
 
-## Paso AWS-3 — Pipeline de releases por tag (GitHub Actions)
+## Paso AWS-2 — Env vars por entorno
 
-**Archivo nuevo:** `.github/workflows/deploy.yml`.
+**Herramientas:** consola de Amplify → *Hosting* → *Environment variables*.
 
-**Flujo:** al crearse un tag `v*` → build + push de la imagen a **ECR** → actualizar el servicio App Runner con la tag nueva → health check del deployment.
-
-**Pseudo-flujo del workflow:**
-
-```yaml
-name: deploy
-on:
-  push:
-    tags: ["v*"]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - checkout
-      - build docker image (tag = git tag)
-      - aws ecr push (login con OIDC, sin secretos largos)
-      - app runner start-deployment / update service a la imagen nueva
-      - health check + rollback si falla
-```
+1. Añadir `GITHUB_TOKEN` (tu PAT actual) al entorno de producción.
+2. Cuando arranque la IA (IA-1), añadir `GEMINI_API_KEY` al mismo lugar.
+3. Guardar → Amplify re-despliega automáticamente con las variables nuevas.
 
 **¿Por qué?**
-- Con esto, "publicar una versión" = `git tag v0.2.0 && git push --tags`. Cada fase de IA se despliega sola.
-- El modelo por tag da releases **auditables** (cada versión es reproducible) y rollback trivial al tag anterior.
-- App Runner también soporta auto-deploy por push a `main`; por tag es más controlado.
+- Los tokens viven solo en el entorno de Amplify (nunca en el repo ni en el bundle del cliente).
+- Los deploys automáticos regeneran la app con las env vars actualizadas al hacer merge a `main`.
+
+## Paso AWS-3 — CI/CD: deploy por push + dominio
+
+**Configuración:** consola de Amplify → *Hosting* → *Domain management*.
+
+- **CI/CD por rama:** Amplify re-builda y publica cada push/merge a `main`. Para *previews* por PR, conectar ramas extra o usar full-stack environments.
+- **Dominio:** el subdominio `https://<appid>.amplifyapp.com` es HTTPS por defecto. Para un dominio propio, conectar en *Domain management* (SSL automático con ACM).
+- **Rollback:** *Deployments* → cada deploy queda listado; se puede re-desplegar una versión anterior en 1 clic.
+
+**¿Por qué?**
+- "Publicar una versión" = merge a `main`: cero pipelines que mantener.
+- Los tags de versión (`v0.2.0`, …) siguen creándose como registro auditorio, pero el deploy no depende de ellos.
 
 ## Paso IA-1 — Esqueleto de streaming *(tag v0.2.0)*
 
@@ -447,4 +399,4 @@ bun run lint
 bun run build
 ```
 
-+ deploy **manual** con el tag correspondiente (`v0.2.0`, …) y prueba en App Runner antes de seguir a la siguiente.
++ deploy automático de Amplify al mergear a `main` y prueba en `https://<appid>.amplifyapp.com` antes de seguir a la siguiente.

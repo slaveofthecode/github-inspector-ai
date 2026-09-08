@@ -9,7 +9,7 @@ Gestión del proyecto: stack, plan de V1 sólida, visión futura con IA y estrat
 - **Consumo de GitHub:** `fetch` + Zod (versión actual). **Octokit + GraphQL** cuando la capa de IA multiplique las llamadas (punto de quiebre: Fase IA-2).
 - **Validación:** Zod (cliente y servidor), un único schema en `lib/validation.ts`.
 - **IA (Fases IA-1..4):** Vercel AI SDK + `@ai-sdk/google` (Gemini **free tier**, sin tarjeta) para el LLM; **OSV.dev** (API pública gratuita, sin key) para la detección determinista de vulnerabilidades.
-- **Deploy:** AWS **App Runner** (pago por uso) — ver sección [AWS](#aws--deploy-y-releases).
+- **Deploy:** AWS **Amplify Hosting** (Free Tier) conectado a GitHub — ver sección [AWS](#aws--deploy-y-releases).
 
 ### ¿Por qué `fetch` + Zod ahora, y Octokit + GraphQL después?
 
@@ -99,38 +99,29 @@ Punto de partida: `main` en `c6ee21b` (V1 estable, sin AI). Cada hito publica un
 
 - [ ] Cuando IA-2/IA-3 multipliquen requests a GitHub o haya que leer varios archivos por repo, migrar a Octokit + GraphQL (ver rationale arriba).
 
-## AWS — Deploy y releases
+## AWS — Deploy y releases (Amplify Hosting)
 
-> Decisión: **arrancar el deploy en AWS desde la versión actual (V1, sin AI)** e ir publicando cada fase como un release nuevo. Además de asegurar el sitio, es un skill demostrable para el portfolio.
+> Decisión: **desplegar en AWS desde la versión actual (V1, sin AI)** e ir publicando cada fase como un release nuevo. Amplify Hosting ofrece CI/CD automático conectado a GitHub dentro del **Free Tier** de AWS, sin Dockerfile ni infraestructura extra que administrar.
 
 ### Modelo de releases
 
-- Cada fase publicada = un **tag de versión** (`v0.1.0` actual → `v0.2.0` IA-1 → …).
-- Un pipeline de **GitHub Actions** detecta el tag → build → **deploy automático**. Poco/nada de downtime y rollback fácil si el health check falla.
-- Alternativa simple: App Runner también puede deployar directo desde push a `main`; el modelo por tag da versiones auditables.
+- **CI/CD por rama:** Amplify despliega automáticamente cada push a `main` → "publicar una versión" = merge a `main`.
+- Cada fase publicada mantiene un **tag de versión** como registro auditorio (`v0.1.0` actual → `v0.2.0` IA-1 → …), pero el deploy no depende de tags: lo dispara el push.
+- Rollback simple: Amplify conserva los deployments anteriores y permite volver a uno previo desde la consola.
 
-### Ahora (V1, sin AI): AWS App Runner
+### Ahora (V1, sin IA): AWS Amplify Hosting
 
-- **Servicio:** App Runner (pago por uso; a tráfico de portfolio ≈ **$0–5/mes**).
-- **Fuente:** el repo de GitHub (build automático desde el `Dockerfile`).
-- **Necesario:**
-  - `Dockerfile` para el server Node de Next.js con `output: 'standalone'`.
-  - Env vars en el servicio: `GITHUB_TOKEN` (+ `GEMINI_API_KEY` cuando arranque la IA).
-  - Cuenta AWS con tarjeta de crédito (solo por verificación de identidad).
-- **Ventajas:** HTTPS y escala resueltos por AWS; sin VPC/ALB que administrar y **sin problema de idle-timeout para streaming** (no hay ALB).
-
-### Futuro (cuando escale): ECS Fargate + ALB
-
-- **Servicio:** Fargate detrás de un ALB + CloudFront (CDN); secretos en Secrets Manager.
-- **Costo:** ~$30–40/mes fijo hay o no tráfico (por eso se pospone).
-- **Ojo:** subir el **idle timeout del ALB** de 60s → ~300s (o 0) o el streaming de Gemini se corta con un 504 a mitad de la respuesta.
-- Mismo pipeline de GitHub Actions: build → ECR → deploy rolling/blue-green por tag.
+- **Servicio:** Amplify Hosting — **Free Tier** (~1000 min de build/mes, 5 GB de storage, 15 GB de transferencia; SSR de Next.js incluido).
+- **Fuente:** el repo de GitHub conectado directamente (rama `main`).
+- **Build:** auto-detección del framework **Next.js SSR** → usa el build output por defecto de Next.js (sin `output: 'standalone'`, sin `Dockerfile`, sin `amplify.yml` custom).
+- **Env vars:** en la consola de Amplify (por entorno): `GITHUB_TOKEN` (+ `GEMINI_API_KEY` cuando arranque la IA).
+- **Ventajas:** CI/CD automático por push, HTTPS y escala resueltos por AWS, previews por PR (full-stack environments) y sin coste fijo a tráfico de portfolio.
+- **Necesario:** cuenta AWS (la tarjeta de crédito es solo verificación de identidad).
 
 ### Costos y cuentas (resumen para el developer)
 
 - Cuenta AWS: gratis en sí; se paga por uso. La tarjeta es solo verificación de identidad.
-- App Runner: pago por vCPU/memoria por segundo; a tráfico bajo ≈ $0–5/mes.
-- Fargate + ALB: **siempre** ~$30–40/mes.
+- Amplify Hosting: el **Free Tier** cubre build + hosting + SSR a tráfico de portfolio; pasa a pago por uso al superar los límites del tier.
 - Gemini free: cuota diaria generosa, sin tarjeta. OSV.dev: gratis sin key. Ver límites de cada proveedor.
 
 ## Proveedores de IA (free tier)

@@ -130,7 +130,7 @@ The long-term vision for the project — including AI-powered summaries, depende
 
 ## Deployment
 
-The project plan targets **AWS App Runner** (pay-per-use, ~$0–5/month at low traffic). The app is containerized with a `Dockerfile` using Next.js's `output: 'standalone'` mode and released via git tags through a GitHub Actions pipeline — each new version deploys automatically. See [ROADMAP.md](./ROADMAP.md) for the full AWS plan.
+The project deploys to **AWS Amplify Hosting** (Free Tier — ~1000 build minutes/month, 5 GB storage, 15 GB transfer with Next.js SSR included), connected directly to your GitHub repository. Amplify auto-detects the Next.js SSR framework, deploys automatically on every push to `main` (no Dockerfile or CI pipeline to maintain), and provides HTTPS out of the box. Set `GITHUB_TOKEN` (and later `GEMINI_API_KEY`) as environment variables in the Amplify console. See [ROADMAP.md](./ROADMAP.md) for the full AWS plan.
 
 For a quick start elsewhere, Vercel works out of the box:
 
