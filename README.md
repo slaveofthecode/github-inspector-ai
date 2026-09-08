@@ -10,12 +10,14 @@ Inspect any GitHub user's public repositories, top technologies, and metadata fr
 ## Features
 
 - **Search by URL or username** — paste `https://github.com/user` or just `user`; the app extracts and validates the account for you.
-- **Top languages per repository** — the 5 most-used technologies of every repo, based on byte usage from the GitHub API.
+- **All public repositories, no caps** — the server-side route paginates through every page of the GitHub REST API, so accounts with 100+ repos are fully listed.
+- **Sort by Created Date or Last Commit** — toggle the ordering right from the sticky results header.
+- **Top languages per repository with brand icons** — the 5 most-used technologies of every repo, based on byte usage from the GitHub API, rendered with brand icons.
 - **Key metadata at a glance** — creation date and last-commit date on every card.
-- **Direct links** — each repository opens on GitHub in a new tab.
+- **Direct links** — each repository opens on GitHub in a new tab; the `@username` in the results header links to the user's GitHub profile.
 - **Infinite scroll** — results load progressively as you scroll; no pagination clicks.
 - **Smart loading states** — skeleton cards while fetching, clear empty and error states.
-- **Dark, modern UI** — built with Tailwind CSS and shadcn/ui components.
+- **Dark, modern UI** — built with Tailwind CSS, shadcn/ui, and lucide-react icons.
 
 ## Tech Stack
 
@@ -23,6 +25,7 @@ Inspect any GitHub user's public repositories, top technologies, and metadata fr
 |---|---|
 | Framework | [Next.js 16](https://nextjs.org) (App Router) |
 | UI | React 19 + [Tailwind CSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) |
+| Icons | [simple-icons](https://simpleicons.org) (language badges) + [lucide-react](https://lucide.dev) (UI) |
 | Language | TypeScript |
 | Validation | [Zod](https://zod.dev) (client and server) |
 | Package manager | [Bun](https://bun.sh) |
@@ -71,10 +74,12 @@ GITHUB_TOKEN=github_pat_xxxxxxx
 ```
 github-inspector-ai/
 ├── app/
-│   ├── api/repos/route.ts   # API route: calls GitHub REST API
+│   ├── api/repos/route.ts   # API route: calls GitHub REST API (paginated)
 │   ├── layout.tsx           # Root layout, fonts, metadata
 │   └── page.tsx             # Home page UI + search logic
-├── components/ui/           # shadcn/ui components (button, card, badge, ...)
+├── components/
+│   ├── language-badge.tsx   # Language labels with brand icons
+│   └── ui/                  # shadcn/ui components (button, card, badge, ...)
 ├── lib/
 │   ├── utils.ts             # Class-name utility
 │   └── validation.ts        # Zod schemas + URL/username parser
@@ -90,7 +95,7 @@ The app exposes a single internal API route used by the frontend.
 
 ### `GET /api/repos?username=<username>`
 
-Returns public repositories for a GitHub user, sorted by creation date (newest first).
+Returns **all** public repositories for a GitHub user, sorted by creation date (newest first). The GitHub REST API is paginated server-side (up to 100 repos per page), so accounts with any number of public repos are fully covered.
 
 ```json
 {
@@ -123,9 +128,11 @@ Returns public repositories for a GitHub user, sorted by creation date (newest f
 
 The long-term vision for the project — including AI-powered summaries, dependency/vulnerability analysis, and CVE explanations — is documented in [ROADMAP.md](./ROADMAP.md).
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy the app:
+The project plan targets **AWS App Runner** (pay-per-use, ~$0–5/month at low traffic). The app is containerized with a `Dockerfile` using Next.js's `output: 'standalone'` mode and released via git tags through a GitHub Actions pipeline — each new version deploys automatically. See [ROADMAP.md](./ROADMAP.md) for the full AWS plan.
+
+For a quick start elsewhere, Vercel works out of the box:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fslaveofthecode%2Fgithub-inspector-ai)
 
