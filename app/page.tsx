@@ -19,6 +19,7 @@ import {
 	TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { LanguageBadge } from '@/components/language-badge';
+import { parseGithubInput } from '@/lib/validation';
 import { Search, ArrowUp, ExternalLink, Loader2, Info } from 'lucide-react';
 
 interface Repository {
@@ -47,31 +48,11 @@ export default function Home() {
 	const [showScrollTop, setShowScrollTop] = useState(false);
 	const observerRef = useRef<HTMLDivElement | null>(null);
 
-	const extractUsername = (input: string): string | null => {
-		const trimmed = input.trim();
-		if (!trimmed) return null;
-
-		try {
-			if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-				const url = new URL(trimmed);
-				if (url.hostname.includes('github.com')) {
-					const pathParts = url.pathname.split('/').filter(Boolean);
-					return pathParts[0] || null;
-				}
-				return null;
-			}
-			const githubUsernameRegex = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
-			return githubUsernameRegex.test(trimmed) ? trimmed : null;
-		} catch {
-			return null;
-		}
-	};
-
 	const handleSearch = async (e: FormEvent) => {
 		e.preventDefault();
 		setError(null);
 
-		const username = extractUsername(inputUrl);
+		const username = parseGithubInput(inputUrl);
 
 		if (!username) {
 			setError(
