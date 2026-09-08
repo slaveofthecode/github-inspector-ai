@@ -14,6 +14,22 @@ interface IGitHubRepo {
 	languages_url: string;
 }
 
+function getNextPageUrl(linkHeader: string | null): string | null {
+	if (!linkHeader) return null;
+
+	for (const part of linkHeader.split(',')) {
+		const [urlPart, ...relParts] = part.split(';').map((s) => s.trim());
+		if (
+			relParts.some((rel) => rel.includes('rel="next"')) &&
+			urlPart?.startsWith('<') &&
+			urlPart.endsWith('>')
+		) {
+			return urlPart.slice(1, -1);
+		}
+	}
+	return null;
+}
+
 export async function GET(request: NextRequest) {
 	// get the username from the request
 	const usernameParam = request.nextUrl.searchParams.get('username');
@@ -46,26 +62,35 @@ export async function GET(request: NextRequest) {
 		}
 		headers.set('Content-Type', 'application/json');
 
-		// fetch the repos from the GitHub API
-		const response = await fetch(
-			`https://api.github.com/users/${username}/repos?per_page=100`,
-			{ headers }
-		);
-		if (!response.ok) {
-			if (response.status === 404) {
+		// fetch ALL the repos from the GitHub API (paginated, up to 100 per page)
+		const allRepos: IGitHubRepo[] = [];
+		let pageUrl: string | null =
+			`https://api.github.com/users/${username}/repos?per_page=100`;
+
+		// safety net: GitHub lists at most 100 repos per page; cap total pages
+		let pagesFetched = 0;
+		while (pageUrl && pagesFetched < 100) {
+			const response = await fetch(pageUrl, { headers });
+			if (!response.ok) {
+				if (response.status === 404) {
+					return NextResponse.json(
+						{ error: 'GitHub user not found' },
+						{ status: 404 }
+					);
+				}
 				return NextResponse.json(
-					{ error: 'GitHub user not found' },
-					{ status: 404 }
+					{ error: 'Failed to fetch repos' },
+					{ status: response.status }
 				);
 			}
-			return NextResponse.json(
-				{ error: 'Failed to fetch repos' },
-				{ status: response.status }
-			);
+
+			const pageData: IGitHubRepo[] = await response.json();
+			allRepos.push(...pageData);
+			pageUrl = getNextPageUrl(response.headers.get('link'));
+			pagesFetched++;
 		}
 
-		// parse the response
-		const reposData = await response.json();
+		const reposData = allRepos;
 
 		// sort by created at descending
 		reposData.sort(
