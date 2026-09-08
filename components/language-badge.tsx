@@ -83,7 +83,7 @@ export function LanguageBadge({ name }: { name: string }) {
 			<svg
 				role="img"
 				viewBox="0 0 24 24"
-				className="size-[27px] fill-current"
+				className="size-6.75 fill-current"
 				style={{ color: `#${iconData.hex}` }}
 			>
 				<path d={iconData.path} />
