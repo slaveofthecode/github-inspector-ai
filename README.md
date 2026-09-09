@@ -5,7 +5,7 @@ Inspect any GitHub user's public repositories, top technologies, and metadata fr
 | | |
 |---|---|
 | **Site** | https://main.d22y0lq8a3u6xm.amplifyapp.com |
-| **Status** | Active development |
+| **Status** | Active development — repo insights live · dependency vulnerability scan coming soon |
 
 ## Features
 
@@ -124,9 +124,12 @@ Returns **all** public repositories for a GitHub user, sorted by creation date (
 | `429` | GitHub API rate limit reached (try again later) |
 | `500` | Unexpected server error |
 
-## Roadmap
+## What's next
 
-The long-term vision for the project — including AI-powered summaries, dependency/vulnerability analysis, and CVE explanations — is documented in [ROADMAP.md](./ROADMAP.md).
+- **Dependency vulnerability scan** — detect known security vulnerabilities (CVEs) in each repository's dependencies via OSV.dev, presented in plain language.
+- **Vulnerability explanations** — optional AI analysis that prioritizes and explains each finding (coming in a later release).
+
+The full long-term vision is documented in [ROADMAP.md](./ROADMAP.md).
 
 ## Deployment
 

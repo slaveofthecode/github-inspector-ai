@@ -20,7 +20,16 @@ import {
 } from '@/components/ui/tooltip';
 import { LanguageBadge } from '@/components/language-badge';
 import { parseGithubInput } from '@/lib/validation';
-import { Search, ArrowUp, ExternalLink, Loader2, Info } from 'lucide-react';
+import {
+	Search,
+	ArrowUp,
+	ExternalLink,
+	Loader2,
+	Info,
+	CheckCircle2,
+	Clock,
+	ShieldAlert,
+} from 'lucide-react';
 
 interface Repository {
 	id: number;
@@ -143,9 +152,22 @@ export default function Home() {
 							GitHub Inspector
 						</h1>
 						<p className="text-zinc-400 text-sm md:text-base">
-							Inspect public repositories, technologies, and metadata instantly.
+							Inspect any GitHub user&apos;s public repositories, top technologies
+							and metadata — with dependency security insights coming soon.
 						</p>
 					</header>
+
+					{/* Vision strip: what's live vs what's next */}
+					<div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+						<span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-800/60 bg-indigo-950/40 px-3 py-1 font-medium text-indigo-300">
+							<CheckCircle2 className="h-3.5 w-3.5" />
+							Repo insights — Live now
+						</span>
+						<span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 font-medium text-zinc-400">
+							<Clock className="h-3.5 w-3.5" />
+							Dependency vulnerability scan — Coming soon
+						</span>
+					</div>
 
 					{/* Search Form - Integrated Lens Button */}
 					<form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
@@ -321,6 +343,19 @@ export default function Home() {
 											</div>
 										</CardContent>
 									)}
+
+									{/* Vulnerability scan (coming soon) */}
+									<CardContent className="pt-3">
+										<button
+											type="button"
+											disabled
+											title="Coming soon."
+											className="inline-flex select-none items-center gap-1.5 rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-1.5 text-xs font-medium text-zinc-500 cursor-not-allowed"
+										>
+											<ShieldAlert className="h-3.5 w-3.5" />
+											Scan vulnerabilities
+										</button>
+									</CardContent>
 								</Card>
 							))
 						)}
