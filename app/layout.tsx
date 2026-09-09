@@ -12,7 +12,12 @@ const geistMono = Geist_Mono({
 	variable: '--font-geist-mono',
 });
 
+const siteUrl =
+	process.env.NEXT_PUBLIC_SITE_URL ||
+	'https://main.d22y0lq8a3u6xm.amplifyapp.com';
+
 export const metadata: Metadata = {
+	metadataBase: new URL(siteUrl),
 	title: 'GitHub Inspector',
 	description:
 		"Inspect any GitHub user's public repositories, top languages, and metadata in a clean, fast interface.",
@@ -22,7 +27,13 @@ export const metadata: Metadata = {
 			"Inspect any GitHub user's public repositories, top languages, and metadata in a clean, fast interface.",
 		type: 'website',
 		locale: 'en_US',
-		url: 'https://github.com/slaveofthecode/github-inspector-ai',
+		url: siteUrl,
+	},
+	twitter: {
+		card: 'summary_large_image',
+		title: 'GitHub Inspector',
+		description:
+			"Inspect any GitHub user's public repositories, top languages, and metadata in a clean, fast interface.",
 	},
 };
 

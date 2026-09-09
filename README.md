@@ -4,7 +4,7 @@ Inspect any GitHub user's public repositories, top technologies, and metadata fr
 
 | | |
 |---|---|
-| **Site** | https://slaveofthecode.github.io/github-inspector-ai |
+| **Site** | https://main.d22y0lq8a3u6xm.amplifyapp.com |
 | **Status** | Active development |
 
 ## Features
@@ -143,5 +143,5 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 **Gustavo Lopez** — Full-stack software engineer.
 
 - GitHub: [github.com/slaveofthecode](https://github.com/slaveofthecode)
-- Project site: [https://slaveofthecode.github.io/github-inspector-ai](https://slaveofthecode.github.io/github-inspector-ai)
+- Project site: [https://main.d22y0lq8a3u6xm.amplifyapp.com](https://main.d22y0lq8a3u6xm.amplifyapp.com)
 - LinkedIn: [https://www.linkedin.com/in/gustavoml](https://www.linkedin.com/in/gustavoml/)
