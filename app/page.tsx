@@ -30,6 +30,7 @@ import {
 	Clock,
 	ShieldAlert,
 } from 'lucide-react';
+import { RepoAnalysis } from '@/components/repo-analysis';
 
 interface Repository {
 	id: number;
@@ -152,8 +153,9 @@ export default function Home() {
 							GitHub Inspector
 						</h1>
 						<p className="text-zinc-400 text-sm md:text-base">
-							Inspect any GitHub user&apos;s public repositories, top technologies
-							and metadata — with dependency security insights coming soon.
+							Inspect any GitHub user&apos;s public repositories, top
+							technologies and metadata — with dependency security insights
+							coming soon.
 						</p>
 					</header>
 
@@ -226,43 +228,43 @@ export default function Home() {
 
 							{/* Custom Radio/Badge Toggles */}
 							{allRepos.length > 0 && (
-							<div className="flex items-center gap-2">
-								<div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 p-1 rounded-lg">
-									<button
-										type="button"
-										onClick={() => setSortCriterion('created')}
-										className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-											sortCriterion === 'created'
-												? 'bg-indigo-600 text-white shadow-sm'
-												: 'text-zinc-400 hover:text-zinc-200'
-										}`}
-									>
-										Created Date
-									</button>
-									<button
-										type="button"
-										onClick={() => setSortCriterion('updated')}
-										className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-											sortCriterion === 'updated'
-												? 'bg-indigo-600 text-white shadow-sm'
-												: 'text-zinc-400 hover:text-zinc-200'
-										}`}
-									>
-										Last Commit
-									</button>
-								</div>
+								<div className="flex items-center gap-2">
+									<div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 p-1 rounded-lg">
+										<button
+											type="button"
+											onClick={() => setSortCriterion('created')}
+											className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+												sortCriterion === 'created'
+													? 'bg-indigo-600 text-white shadow-sm'
+													: 'text-zinc-400 hover:text-zinc-200'
+											}`}
+										>
+											Created Date
+										</button>
+										<button
+											type="button"
+											onClick={() => setSortCriterion('updated')}
+											className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+												sortCriterion === 'updated'
+													? 'bg-indigo-600 text-white shadow-sm'
+													: 'text-zinc-400 hover:text-zinc-200'
+											}`}
+										>
+											Last Commit
+										</button>
+									</div>
 
-								{/* Info Icon Tooltip */}
-								<Tooltip>
-									<TooltipTrigger className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 cursor-pointer">
-										<Info className="w-4 h-4" />
-									</TooltipTrigger>
-									<TooltipContent className="bg-zinc-900 border-zinc-800 text-zinc-300 text-xs">
-										Repositories are sorted in descending order (newest/most
-										recent first).
-									</TooltipContent>
-								</Tooltip>
-							</div>
+									{/* Info Icon Tooltip */}
+									<Tooltip>
+										<TooltipTrigger className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 cursor-pointer">
+											<Info className="w-4 h-4" />
+										</TooltipTrigger>
+										<TooltipContent className="bg-zinc-900 border-zinc-800 text-zinc-300 text-xs">
+											Repositories are sorted in descending order (newest/most
+											recent first).
+										</TooltipContent>
+									</Tooltip>
+								</div>
 							)}
 						</div>
 					)}
@@ -272,10 +274,7 @@ export default function Home() {
 						{loading ? (
 							<div className="space-y-4">
 								{Array.from({ length: 5 }).map((_, i) => (
-									<Card
-										key={i}
-										className="bg-zinc-900/70 border-zinc-800/80"
-									>
+									<Card key={i} className="bg-zinc-900/70 border-zinc-800/80">
 										<CardHeader className="pb-3">
 											<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
 												<Skeleton className="h-6 w-1/3 rounded-md" />
@@ -355,6 +354,11 @@ export default function Home() {
 											<ShieldAlert className="h-3.5 w-3.5" />
 											Scan vulnerabilities
 										</button>
+									</CardContent>
+
+									{/* AI Analysis Component */}
+									<CardContent className="pt-0 pb-3">
+										<RepoAnalysis owner={searchedUser!} repo={repo.name} />
 									</CardContent>
 								</Card>
 							))
