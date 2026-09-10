@@ -149,7 +149,7 @@ export default function Home() {
 				<div className="max-w-4xl mx-auto space-y-8">
 					{/* Header */}
 					<header className="text-center space-y-2 pt-4">
-						<h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+						<h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-linear-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
 							GitHub Inspector
 						</h1>
 						<p className="text-zinc-400 text-sm md:text-base">

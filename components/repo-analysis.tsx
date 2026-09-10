@@ -38,7 +38,16 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 			});
 
 			if (!response.ok) {
-				throw new Error('Failed to analyze repository');
+				let message = 'Failed to analyze repository';
+				try {
+					const data = await response.json();
+					if (typeof data?.error === 'string') {
+						message = data.error;
+					}
+				} catch {
+					// keep default message
+				}
+				throw new Error(message);
 			}
 
 			if (!response.body) {

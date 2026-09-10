@@ -9,6 +9,22 @@ export const githubUsernameSchema = z
 		"That doesn't look like a valid GitHub username."
 	);
 
+export const repoNameSchema = z
+	.string()
+	.trim()
+	.min(1, 'Repository name is required.')
+	.max(100, 'Repository name is too long.')
+	.regex(
+		/^[a-zA-Z\d](?:[a-zA-Z\d._-]*[a-zA-Z\d])?$/,
+		'That looks like an invalid repository name.'
+	);
+
+export const analyzeBodySchema = z.object({
+	owner: githubUsernameSchema,
+	repo: repoNameSchema,
+	sha: z.string().max(40).optional(),
+});
+
 export function parseGithubInput(input: string): string | null {
 	const trimmed = input.trim();
 	if (!trimmed) return null;
