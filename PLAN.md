@@ -337,7 +337,7 @@ Octokit + GraphQL quedaron **descartados para la V1** (pocas llamadas, API simpl
 - "Publicar una versión" = merge a `main`: cero pipelines que mantener.
 - Los tags de versión (`v0.2.0`, …) siguen creándose como registro auditorio, pero el deploy no depende de ellos.
 
-## Paso IA-1 — Esqueleto de streaming *(tag v0.2.0)*
+## Paso IA-1 — Esqueleto de streaming *(entregado en la rama `feat/009`)*
 
 **Instalar:**
 
@@ -357,6 +357,23 @@ bun add ai @ai-sdk/google
 **¿Por qué?**
 - El Vercel AI SDK da **streaming out-of-the-box** y abstrae el provider (cambiar Gemini por otro mañana no toca la UI).
 - IA-1 arranca resumiendo el README; la detección real de CVEs llega en IA-2. Iteración chica y verificable.
+
+## Paso IA-1b — Blindaje de producción *(núcleo de IA-4 adelantado, tag v0.2.0, rama `feat/010`)* ✅
+
+> **Por qué adelantado a IA-2:** IA-1 quedó live con el botón "Analyze" consumiendo cuota gratuita de Gemini por request. Para un deploy público (LinkedIn) eso permite quemar la cuota diaria sin límites ni feedback amigable. Este paso entrega el núcleo de IA-4 AHORA; IA-2/IA-3 y el resto de IA-4 siguen intactos en su orden.
+
+**Implementado:**
+- `lib/validation.ts`: `repoNameSchema` + `analyzeBodySchema` (owner/repo validados → **anti-SSRF estructural**, nunca se interpolan en URLs sin pasar por Zod).
+- `lib/cache.ts` (nuevo): cache in-memory con TTL (6h) y tope de 200 entradas, clave `owner/repo@<sha default branch>` (fallback: `pushed_at`).
+- `lib/rate-limit.ts` (nuevo): límite por IP (10/min, ventana 60s) con `getClientIp` (x-forwarded-for / x-real-ip).
+- `lib/ai.ts`: `MAX_README_CHARS` (8k) y `MAX_OUTPUT_TOKENS` (2048).
+- `app/api/analyze/route.ts`: flujo endurecido — 503 si falta key, 429 rate-limit, 400 body inválido, 404 repo no existe, 403 privado, tope de README con nota de truncado, **peek del primer chunk** antes de responder (errores del modelo como 404/429 se convierten en status HTTP reales en vez de un 200 con stream roto), cache de resultados streamed, y stream de texto idéntico al contrato de IA-1.
+- `components/repo-analysis.tsx`: errores no-OK leen el JSON del server y muestran el mensaje amigable mapeado.
+- `package.json` → `0.2.0`.
+
+**Contrato de errores (server → UI):** 400 inválido · 403 privado · 404 no existe · 429 demasiadas peticiones · 507 cuota de IA agotada · 503 no configurado.
+
+**Límites:** rate-limit/cache son in-memory → se resetean en redeploy/instancias (correcto a escala portfolio; el resto de IA-4 contempla Upstash/Redis si hace falta).
 
 ## Paso IA-2 — Detección real de vulnerabilidades *(tag v0.3.0)*
 

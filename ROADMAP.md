@@ -69,13 +69,15 @@ _Nota: se decidió NO usar Octokit/GraphQL en V1 (ver rationale arriba)._
 
 Punto de partida: `main` en `c6ee21b` (V1 estable, sin AI). Cada hito publica un **tag de versión** que dispara el deploy automático en AWS.
 
-### Fase IA-1 — Esqueleto de streaming _(tag v0.2.0)_
+> **Estado:** IA-1 implementada y publicada en `feat/009` (PR pendiente de merge). El **blindaje de producción** (núcleo de IA-4) se entrega en `v0.2.0` vía `feat/010`, antes de IA-2, para proteger la cuota gratuita de Gemini en el deploy público.
 
-- [ ] Instalar `ai` + `@ai-sdk/google`.
-- [ ] `POST /api/analyze`: recibe `{ owner, repo, sha }`, valida con Zod y contra SSRF (solo ramas `github.com` / `raw.githubusercontent.com`).
-- [ ] Leer el README del repo vía API pública de GitHub y pasarlo por Gemini en **streaming**.
-- [ ] Componente cliente "Analyze" por card + panel de markdown en vivo (palabra por palabra).
-- [ ] Manejar repos sin README / privados / 404.
+### Fase IA-1 — Esqueleto de streaming _(entregada en `feat/009`)_
+
+- [x] Instalar `ai` + `@ai-sdk/google`.
+- [x] `POST /api/analyze`: recibe `{ owner, repo }`, valida con Zod (schema `analyzeBodySchema`) y restringe fetch a `api.github.com` / `raw.githubusercontent.com` (anti-SSRF estructural). _Zod+SSRF completados en `v0.2.0`._
+- [x] Leer el README del repo vía API pública de GitHub y pasarlo por Gemini en **streaming**.
+- [x] Componente cliente "Analyze" por card + panel de markdown en vivo (palabra por palabra).
+- [x] Manejar repos sin README / privados / 404.
 
 ### Fase IA-2 — Detección real de vulnerabilidades _(tag v0.3.0)_
 
@@ -88,12 +90,13 @@ Punto de partida: `main` en `c6ee21b` (V1 estable, sin AI). Cada hito publica un
 - [ ] Gemini explica cada CVE (impacto real en ese repo), prioriza y sugiere fixes — **siempre** con los datos deterministas de OSV.dev como única fuente de CVEs (los LLM pueden alucinar CVEs).
 - [ ] Streaming en 2 fases: primero la lista determinista de CVEs, luego el análisis narrativo.
 
-### Fase IA-4 — Robustez _(tag v0.5.0)_
+### Fase IA-4 — Robustez _(tag v0.5.0 · núcleo adelantado a `v0.2.0`)_
 
-- [ ] Cache por `owner/repo@sha` (evita re-análisis si el repo no cambió).
-- [ ] Rate-limit en `/api/analyze` (protege cuota de GitHub y tokens LLM).
-- [ ] Tope de tokens/tamaño en README y límite de repos analizables por usuario.
-- [ ] Manejo de errores bonito (timeout de Gemini, cuota agotada, repo gigante).
+- [x] Cache por `owner/repo@sha` (evita re-análisis si el repo no cambió). _Entregado en `v0.2.0` (in-memory, TTL 6h, tope 200 entradas)._
+- [x] Rate-limit en `/api/analyze` (protege cuota de GitHub y tokens LLM). _Entregado en `v0.2.0` (10/min por IP, in-memory, ventana 60s)._
+- [x] Tope de tokens/tamaño en README y límite de repos analizables por usuario. _Tope de README (8k chars) + `maxOutputTokens` (2048) entregados en `v0.2.0`; límite de repos por usuario pendiente._
+- [x] Manejo de errores bonito (timeout de Gemini, cuota agotada, repo gigante). _Errores mapeados a status + mensajes amigables (400/403/404/429/507) en `v0.2.0`; timeout estricto de Gemini y repo gigante pendientes._
+- [ ] Resto IA-4: persistir cache/rate-limit distribuido (Upstash/Redis) si el tráfico lo exige, límites de repos por usuario, timeout estricto, rate-limit en `GET /api/repos`.
 
 ### Fase IA-5 — Migración Octokit + GraphQL _(tag v0.6.0, solo si el N+1 importa)_
 
