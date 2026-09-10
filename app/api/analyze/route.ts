@@ -19,8 +19,9 @@ Provide a clear, concise, and structured summary in Markdown including:
 - **Key Features**: Primary capabilities.
 - **Tech Stack**: Main tools, frameworks, and languages identified.
 - **Code Health & Assessment**: Brief feedback or observations based on the README.
+- **Suggested Improvements & Fixes**: Concrete, actionable recommendations to improve the repository based only on what you can observe (e.g., missing or outdated documentation, empty/weak README sections, clear setup gaps, missing badges/CI references, dependency alignment, and similar). Present them as a short bulleted list.
 
-Be concise and direct. Avoid unnecessary fluff.`;
+Be concise, direct, and specific. Avoid unnecessary fluff.`;
 
 function jsonError(error: string, status: number) {
 	return NextResponse.json({ error }, { status });
