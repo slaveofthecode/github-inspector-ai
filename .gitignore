@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# internal planning docs (kept local-only, not pushed to GitHub)
+/ROADMAP.md
+/PLAN.md
