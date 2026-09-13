@@ -8,6 +8,15 @@ import {
 import { analyzeBodySchema } from '@/lib/validation';
 import { createCache } from '@/lib/cache';
 import { createRateLimiter, getClientIp } from '@/lib/rate-limit';
+import {
+	KNOWN_MANIFESTS,
+	MAX_MANIFEST_BYTES,
+	MAX_MANIFESTS,
+	parseManifest,
+} from '@/lib/manifests';
+import type { Dependency } from '@/lib/manifests';
+import type { OsvVulnerability } from '@/lib/osv';
+import { queryOsvDependencies } from '@/lib/osv';
 
 const analysisCache = createCache<string>();
 const rateLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
@@ -34,6 +43,71 @@ function githubHeaders(): Record<string, string> {
 			? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
 			: {}),
 	};
+}
+
+async function fetchManifestContent(
+	owner: string,
+	repo: string,
+	path: string,
+	ref: string
+): Promise<string | null> {
+	const url = new URL(
+		`https://api.github.com/repos/${owner}/${repo}/contents/${path
+			.split('/')
+			.map(encodeURIComponent)
+			.join('/')}`
+	);
+	url.searchParams.set('ref', ref);
+	const response = await fetch(url, { headers: githubHeaders() });
+	if (!response.ok) return null;
+	const data = await response.json();
+	if (typeof data.content !== 'string') return null;
+	const text = Buffer.from(data.content, 'base64').toString('utf-8');
+	return text.length > MAX_MANIFEST_BYTES ? null : text;
+}
+
+async function collectVulnerabilities(
+	owner: string,
+	repo: string,
+	ref: string
+): Promise<{ manifestsAnalyzed: number; vulnerabilities: OsvVulnerability[] }> {
+	const url = new URL(
+		`https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(
+			ref
+		)}`
+	);
+	url.searchParams.set('recursive', '1');
+	const treeResponse = await fetch(url, { headers: githubHeaders() });
+	if (!treeResponse.ok) {
+		return { manifestsAnalyzed: 0, vulnerabilities: [] };
+	}
+	const treeData = await treeResponse.json();
+	const tree: { path?: string; type?: string; size?: number }[] = Array.isArray(
+		treeData.tree
+	)
+		? treeData.tree
+		: [];
+
+	const digest = new Map<string, Dependency>();
+	let analyzed = 0;
+	for (const entry of tree) {
+		if (analyzed >= MAX_MANIFESTS) break;
+		if (entry.type !== 'blob' || typeof entry.path !== 'string') continue;
+		const basename = entry.path.split('/').pop() ?? '';
+		if (!KNOWN_MANIFESTS.includes(basename)) continue;
+		if (typeof entry.size === 'number' && entry.size > MAX_MANIFEST_BYTES) continue;
+
+		const content = await fetchManifestContent(owner, repo, entry.path, ref);
+		if (content === null) continue;
+		for (const dep of parseManifest(entry.path, content)) {
+			digest.set(`${dep.ecosystem}:${dep.name}@${dep.version}`, dep);
+		}
+		analyzed += 1;
+	}
+
+	const vulnerabilities =
+		digest.size > 0 ? await queryOsvDependencies([...digest.values()]) : [];
+	return { manifestsAnalyzed: analyzed, vulnerabilities };
 }
 
 function stringToStream(text: string): ReadableStream<string> {
@@ -129,6 +203,27 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
+		const treeRef = /^[0-9a-f]{40}$/.test(revision)
+			? revision
+			: defaultBranch;
+		let vulnerabilitiesPayload: {
+			manifestsAnalyzed: number;
+			vulnerabilities: OsvVulnerability[];
+		};
+		try {
+			vulnerabilitiesPayload = await collectVulnerabilities(
+				owner,
+				repo,
+				treeRef
+			);
+		} catch {
+			vulnerabilitiesPayload = { manifestsAnalyzed: 0, vulnerabilities: [] };
+		}
+		const metadataHeader = `${JSON.stringify({
+			type: 'vulns',
+			...vulnerabilitiesPayload,
+		})}\n`;
+
 		let readmeContent = '';
 		let truncated = false;
 		const readmeResponse = await fetch(
@@ -176,9 +271,10 @@ export async function POST(request: NextRequest) {
 			return jsonError('AI analysis failed. Please try again.', 500);
 		}
 
-		let full = firstRead.done ? '' : firstRead.value;
+		let full = metadataHeader;
 		const replayStream = new ReadableStream<string>({
 			start(controller) {
+				controller.enqueue(metadataHeader);
 				if (firstRead.done) {
 					controller.close();
 					return;

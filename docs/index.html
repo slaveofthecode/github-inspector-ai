@@ -416,6 +416,39 @@
       font-size: 0.9rem;
     }
 
+    /* ---- Severity chips (traffic-light scale) ---- */
+    .sev {
+      display: grid;
+      place-items: center;
+      width: 46px;
+      height: 46px;
+      border-radius: calc(var(--radius) - 4px);
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.8rem;
+      margin-bottom: 16px;
+    }
+
+    .sev-critical {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    }
+
+    .sev-high {
+      background: linear-gradient(135deg, #f97316, #b45309);
+      box-shadow: 0 4px 14px rgba(249, 115, 22, 0.35);
+    }
+
+    .sev-medium {
+      background: linear-gradient(135deg, #eab308, #a16207);
+      box-shadow: 0 4px 14px rgba(234, 179, 8, 0.35);
+    }
+
+    .sev-low {
+      background: linear-gradient(135deg, #22c55e, #15803d);
+      box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);
+    }
+
     /* ---- Footer ---- */
     footer {
       border-top: 1px solid var(--border);
@@ -486,6 +519,7 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#stack">Tech Stack</a></li>
         <li><a href="#how">How it works</a></li>
+        <li><a href="#security">Security</a></li>
         <li><a href="#next">Upcoming</a></li>
         <li><a href="https://github.com/slaveofthecode/github-inspector-ai" target="_blank" rel="noopener noreferrer">Source</a></li>
       </ul>
@@ -495,7 +529,7 @@
   <main id="top">
     <!-- Hero -->
     <section class="hero container">
-      <span class="hero-badge">Next.js + React + TypeScript + Gemini AI</span>
+      <span class="hero-badge">Next.js + React + TypeScript + Gemini AI + OSV.dev</span>
       <h1>
         Every GitHub repository.<br />
         <span class="accent">One clean overview.</span>
@@ -503,7 +537,8 @@
       <p>
         Paste any GitHub URL or username and instantly inspect that user's public
         repositories, top technologies, and key metadata — then get a one-click,
-        streamed AI summary of any repository. No account required.
+        streamed AI summary of any repository, plus a deterministic vulnerability
+        scan of its dependencies. No account required.
       </p>
       <div class="cta-row">
         <a
@@ -598,6 +633,7 @@
         <li><strong>Zod</strong></li>
         <li><strong>GitHub REST API</strong></li>
         <li><strong>Vercel AI SDK</strong> + <strong>Gemini</strong></li>
+        <li><strong>OSV.dev</strong> (vulnerability data)</li>
         <li><strong>Bun</strong></li>
       </ul>
     </section>
@@ -627,6 +663,56 @@
         </div>
       </div>
     </section>
+  <!-- Security primer -->
+    <section id="security" class="container">
+      <h2 class="section-title">A 2-minute primer on security advisories</h2>
+      <p class="section-sub">The vulnerability scan checks a repo's dependencies against OSV.dev. Here's what that means in plain language.</p>
+
+      <div class="grid">
+        <article class="card">
+          <span class="card-tag">Concepts</span>
+          <h3>Vulnerabilities &amp; advisories</h3>
+          <p>A <strong>vulnerability</strong> is a bug in a library that can be abused — remote code execution, injection, privilege escalation. When one is found, the project publishes a <strong>security advisory</strong> naming the versions at risk. Think medication recall: your <code>package.json</code> is the prescription and OSV.dev is the recall list.</p>
+        </article>
+
+        <article class="card">
+          <span class="card-tag">Terminology</span>
+          <h3>CVE vs. GHSA</h3>
+          <p>A <strong>CVE</strong> (e.g. <code>CVE-2021-23337</code>) is the globally recognized identifier for an advisory; a <strong>GHSA</strong> (e.g. <code>GHSA-r5fr-rjxr-66jc</code>) is the same kind of advisory published via GitHub. Many exist in both — the report shows each finding with its aliases.</p>
+        </article>
+
+        <article class="card">
+          <span class="card-tag">Why factual</span>
+          <h3>Deterministic, never AI-invented</h3>
+          <p>Every finding comes from OSV.dev, a fixed database. LLMs can confidently hallucinate CVEs, so the AI never generates a vulnerability — it only summarizes the repository. The same input always produces the same, verifiable report.</p>
+        </article>
+      </div>
+
+      <h3 style="margin: 44px 0 16px; font-size: 1.05rem; letter-spacing: -0.01em;">Severity at a glance</h3>
+      <div class="steps">
+        <div class="step">
+          <span class="sev sev-critical" aria-hidden="true">9+</span>
+          <h3>Critical</h3>
+          <p>Actively exploitable with little or no user interaction — e.g. remote code execution.</p>
+        </div>
+        <div class="step">
+          <span class="sev sev-high" aria-hidden="true">7–9</span>
+          <h3>High</h3>
+          <p>Likely to be exploited and damaging — e.g. data theft or security-bypass flaws.</p>
+        </div>
+        <div class="step">
+          <span class="sev sev-medium" aria-hidden="true">4–7</span>
+          <h3>Medium</h3>
+          <p>Needs conditions or a specific setup to be exploited — fix when convenient.</p>
+        </div>
+        <div class="step">
+          <span class="sev sev-low" aria-hidden="true">0–4</span>
+          <h3>Low / Unknown</h3>
+          <p>Minor impact, hard to trigger, or severity not published — still worth confirming.</p>
+        </div>
+      </div>
+    </section>
+
   <!-- Upcoming -->
     <section id="next" class="container">
       <h2 class="section-title">Where it's going</h2>
@@ -640,9 +726,15 @@
         </article>
 
         <article class="card">
-          <span class="card-tag">Coming soon</span>
+          <span class="card-tag">Live now</span>
           <h3>Dependency vulnerability scan</h3>
-          <p>Per-repository checks for known security vulnerabilities in its dependencies (package.json, requirements.txt, Cargo.toml, go.mod, Gemfile) — presented in plain language.</p>
+          <p>Each AI analysis also reads the repo's dependency manifests (package.json, requirements.txt, Cargo.toml, go.mod, Gemfile) and lists known security vulnerabilities — severity-ranked against OSV.dev, with aliases and affected versions. No AI guesses.</p>
+        </article>
+
+        <article class="card">
+          <span class="card-tag">Coming soon</span>
+          <h3>AI vulnerability explanations</h3>
+          <p>Gemini will prioritize and explain each deterministic finding — what it means for that specific repository and suggested fixes — while OSV.dev stays the only source of CVEs.</p>
         </article>
       </div>
     </section>
