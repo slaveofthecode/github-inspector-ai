@@ -27,7 +27,6 @@ import {
 	Loader2,
 	Info,
 	CheckCircle2,
-	Clock,
 	ShieldAlert,
 } from 'lucide-react';
 import { RepoAnalysis } from '@/components/repo-analysis';
@@ -154,8 +153,7 @@ export default function Home() {
 						</h1>
 						<p className="text-zinc-400 text-sm md:text-base">
 							Inspect any GitHub user&apos;s public repositories, top
-							technologies and metadata — with dependency security insights
-							coming soon.
+							technologies and metadata — with dependency security insights.
 						</p>
 					</header>
 
@@ -165,9 +163,9 @@ export default function Home() {
 							<CheckCircle2 className="h-3.5 w-3.5" />
 							Repo insights — Live now
 						</span>
-						<span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 font-medium text-zinc-400">
-							<Clock className="h-3.5 w-3.5" />
-							Dependency vulnerability scan — Coming soon
+						<span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-800/60 bg-indigo-950/40 px-3 py-1 font-medium text-indigo-300">
+							<ShieldAlert className="h-3.5 w-3.5" />
+							Dependency vulnerability scan — Live now
 						</span>
 					</div>
 
@@ -342,19 +340,6 @@ export default function Home() {
 											</div>
 										</CardContent>
 									)}
-
-									{/* Vulnerability scan (coming soon) */}
-									<CardContent className="pt-3">
-										<button
-											type="button"
-											disabled
-											title="Coming soon."
-											className="inline-flex select-none items-center gap-1.5 rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-1.5 text-xs font-medium text-zinc-500 cursor-not-allowed"
-										>
-											<ShieldAlert className="h-3.5 w-3.5" />
-											Scan vulnerabilities
-										</button>
-									</CardContent>
 
 									{/* AI Analysis Component */}
 									<CardContent className="pt-0 pb-3">
