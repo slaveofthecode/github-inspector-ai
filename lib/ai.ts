@@ -17,11 +17,12 @@ Provide a clear, concise, and structured summary in Markdown including:
 Be concise, direct, and specific. Avoid unnecessary fluff.`;
 
 const VULN_EXPLANATION_RULES = `
-## Security findings (deterministic scan)
+## Security findings (deterministic scan) — REQUIRED
 
 The repository's dependency manifests were checked against OSV.dev by code (not by you). The resulting vulnerability list is included in the prompt as JSON — that is the ONLY source of truth for vulnerabilities.
 
-- Add a "**Security Findings**" section to your summary explaining each listed vulnerability in plain language: what the flaw is, why it matters for THIS repository, its severity, whether the declared dependency is affected, and a concrete recommended fix.
+- REQUIREMENT: ALWAYS include a "**Security Findings**" section in your summary, placed IMMEDIATELY AFTER the Overview & Purpose section (before Key Features). It must cover every vulnerability in the provided JSON list when the repo has them.
+- For each finding include: the exact identifier(s) and aliases, severity, the affected dependency and version range, why it matters for THIS repository, and a concrete recommended fix. Order findings by severity (Critical → High → Medium → Low).
 - HARD RULE: Only reference the CVE/GHSA IDs, aliases, severities, scores, summaries, and affected versions that appear in the provided JSON list. NEVER invent vulnerabilities, IDs, aliases, scores, or versions that are not in that list.
 - Only claim a specific "fixed version" if it is directly evident from the affected version ranges (e.g. the upper bound of a range like "<2.5.4"). Otherwise recommend upgrading to the latest stable release or consulting the vendor advisory.
 - If the list is empty, state briefly that no known vulnerabilities were found in the declared dependencies and do not fabricate any.`;
