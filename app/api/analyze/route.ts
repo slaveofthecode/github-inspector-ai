@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { streamText, toTextStream, createTextStreamResponse } from 'ai';
 import {
+	buildSystemPrompt,
+	formatVulnerabilitiesForPrompt,
 	getGeminiModel,
 	MAX_README_CHARS,
 	MAX_OUTPUT_TOKENS,
@@ -20,17 +22,6 @@ import { queryOsvDependencies } from '@/lib/osv';
 
 const analysisCache = createCache<string>();
 const rateLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
-
-const SYSTEM_PROMPT = `You are an expert software engineer and repository inspector.
-Analyze the provided repository information and README content.
-Provide a clear, concise, and structured summary in Markdown including:
-- **Overview & Purpose**: What the project does.
-- **Key Features**: Primary capabilities.
-- **Tech Stack**: Main tools, frameworks, and languages identified.
-- **Code Health & Assessment**: Brief feedback or observations based on the README.
-- **Suggested Improvements & Fixes**: Concrete, actionable recommendations to improve the repository based only on what you can observe (e.g., missing or outdated documentation, empty/weak README sections, clear setup gaps, missing badges/CI references, dependency alignment, and similar). Present them as a short bulleted list.
-
-Be concise, direct, and specific. Avoid unnecessary fluff.`;
 
 function jsonError(error: string, status: number) {
 	return NextResponse.json({ error }, { status });
@@ -247,13 +238,21 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
-		const userPrompt = `${truncated ? 'Note: the README was truncated for length.\n' : ''}Repository: ${owner}/${repo}\n\nREADME Content:\n${
+		const hasVulnerabilities =
+			vulnerabilitiesPayload.vulnerabilities.length > 0;
+		const vulnerabilitiesBlock = hasVulnerabilities
+			? `\n\nDeterministic dependency scan (source: OSV.dev, authoritative — do not add or modify anything):\n${formatVulnerabilitiesForPrompt(
+					vulnerabilitiesPayload.vulnerabilities
+				)}`
+			: '';
+
+		const userPrompt = `${truncated ? 'Note: the README was truncated for length.\n' : ''}Repository: ${owner}/${repo}${vulnerabilitiesBlock}\n\nREADME Content:\n${
 			readmeContent || 'No README file found for this repository.'
 		}`;
 
 		const result = streamText({
 			model: getGeminiModel(),
-			system: SYSTEM_PROMPT,
+			system: buildSystemPrompt(hasVulnerabilities),
 			prompt: userPrompt,
 			maxOutputTokens: MAX_OUTPUT_TOKENS,
 		});
@@ -271,7 +270,7 @@ export async function POST(request: NextRequest) {
 			return jsonError('AI analysis failed. Please try again.', 500);
 		}
 
-		let full = metadataHeader;
+		let full = metadataHeader + (firstRead.done ? '' : firstRead.value);
 		const replayStream = new ReadableStream<string>({
 			start(controller) {
 				controller.enqueue(metadataHeader);

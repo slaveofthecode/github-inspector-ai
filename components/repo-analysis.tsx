@@ -227,13 +227,22 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 
 					{!error && !analysis && loading && (
 						<p className="text-zinc-500 italic text-center animate-pulse">
-							Generating insights from repository README...
+							Generating insights and security explanations from the
+							repository...
 						</p>
 					)}
 
-					{analysis && (
-						<div className="prose prose-invert prose-xs max-w-none space-y-2">
-							<ReactMarkdown>{analysis}</ReactMarkdown>
+					{!error && analysis && (
+						<div className="space-y-2">
+							{vulnerabilities !== null &&
+								vulnerabilities.length > 0 && (
+									<p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+										AI analysis &amp; security explanations
+									</p>
+								)}
+							<div className="prose prose-invert prose-xs max-w-none space-y-2">
+								<ReactMarkdown>{analysis}</ReactMarkdown>
+							</div>
 						</div>
 					)}
 				</div>
