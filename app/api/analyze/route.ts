@@ -3,6 +3,7 @@ import { streamText, toTextStream, createTextStreamResponse } from 'ai';
 import {
 	buildSystemPrompt,
 	formatVulnerabilitiesForPrompt,
+	GEMINI_TIMEOUT_MS,
 	getGeminiModel,
 	MAX_README_CHARS,
 	MAX_OUTPUT_TOKENS,
@@ -20,8 +21,10 @@ import type { Dependency } from '@/lib/manifests';
 import type { OsvVulnerability } from '@/lib/osv';
 import { queryOsvDependencies } from '@/lib/osv';
 
-const analysisCache = createCache<string>();
+const ANALYSIS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const analysisCache = createCache<string>({ ttlMs: ANALYSIS_CACHE_TTL_MS });
 const rateLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
+const inFlightAnalyses = new Set<string>();
 
 function jsonError(error: string, status: number) {
 	return NextResponse.json({ error }, { status });
@@ -112,6 +115,9 @@ function stringToStream(text: string): ReadableStream<string> {
 
 function friendlyModelError(error: unknown): string {
 	const apiError = error as { name?: string; statusCode?: number };
+	if (apiError.name === 'AbortError' || apiError.name === 'TimeoutError') {
+		return 'Analysis timed out after 90 seconds. The repository may be too large, or the AI service is busy. Please try again later.';
+	}
 	if (apiError.name === 'AI_APICallError') {
 		if (apiError.statusCode === 429) return 'AI daily quota is exhausted. Try again later.';
 		if (apiError.statusCode === 404)
@@ -125,13 +131,9 @@ export async function POST(request: NextRequest) {
 		return jsonError('AI analysis is not configured on this server.', 503);
 	}
 
-	const clientIp = getClientIp(request);
-	if (!rateLimiter.check(clientIp).ok) {
-		return jsonError('Too many analyses. Try again in a moment.', 429);
-	}
-
 	let owner: string;
 	let repo: string;
+	let dedupeKey = '';
 	try {
 		const parsed = analyzeBodySchema.safeParse(await request.json());
 		if (!parsed.success) {
@@ -188,10 +190,28 @@ export async function POST(request: NextRequest) {
 			if (cached !== null) {
 				return createTextStreamResponse({
 					status: 200,
-					headers: { 'Cache-Control': 'no-store' },
-					stream: stringToStream(cached),
+					headers: {
+						'Cache-Control': 'no-store',
+						'X-Cache': 'HIT',
+						'X-Cache-Until': new Date(cached.expiresAt).toISOString(),
+					},
+					stream: stringToStream(cached.value),
 				});
 			}
+		}
+
+		dedupeKey = `${owner}/${repo}`;
+		if (inFlightAnalyses.has(dedupeKey)) {
+			return jsonError(
+				'This repository is already being analyzed. Please wait.',
+				409
+			);
+		}
+		inFlightAnalyses.add(dedupeKey);
+
+		const clientIp = getClientIp(request);
+		if (!rateLimiter.check(clientIp).ok) {
+			return jsonError('Too many analyses. Try again in a moment.', 429);
 		}
 
 		const treeRef = /^[0-9a-f]{40}$/.test(revision)
@@ -255,6 +275,7 @@ export async function POST(request: NextRequest) {
 			system: buildSystemPrompt(hasVulnerabilities),
 			prompt: userPrompt,
 			maxOutputTokens: MAX_OUTPUT_TOKENS,
+			abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
 		});
 
 		const textStream = toTextStream(result);
@@ -264,9 +285,11 @@ export async function POST(request: NextRequest) {
 		try {
 			firstRead = await reader.read();
 		} catch (error) {
+			inFlightAnalyses.delete(dedupeKey);
 			return jsonError(friendlyModelError(error), 507);
 		}
 		if (!firstRead) {
+			inFlightAnalyses.delete(dedupeKey);
 			return jsonError('AI analysis failed. Please try again.', 500);
 		}
 
@@ -275,6 +298,7 @@ export async function POST(request: NextRequest) {
 			start(controller) {
 				controller.enqueue(metadataHeader);
 				if (firstRead.done) {
+					inFlightAnalyses.delete(dedupeKey);
 					controller.close();
 					return;
 				}
@@ -287,6 +311,7 @@ export async function POST(request: NextRequest) {
 							if (cacheable) {
 								analysisCache.set(cacheKey, full);
 							}
+							inFlightAnalyses.delete(dedupeKey);
 							controller.close();
 						} else {
 							full += value;
@@ -294,21 +319,30 @@ export async function POST(request: NextRequest) {
 						}
 					},
 					(error: unknown) => {
+						inFlightAnalyses.delete(dedupeKey);
 						controller.error(new Error(friendlyModelError(error)));
 					}
 				);
 			},
 			cancel() {
+				inFlightAnalyses.delete(dedupeKey);
 				reader.cancel().catch(() => undefined);
 			},
 		});
 
 		return createTextStreamResponse({
 			status: 200,
-			headers: { 'Cache-Control': 'no-store' },
+			headers: {
+				'Cache-Control': 'no-store',
+				'X-Cache': 'MISS',
+				...(cacheable
+					? { 'X-Cache-Until': new Date(Date.now() + ANALYSIS_CACHE_TTL_MS).toISOString() }
+					: {}),
+			},
 			stream: replayStream,
 		});
 	} catch {
+		if (dedupeKey) inFlightAnalyses.delete(dedupeKey);
 		return jsonError('AI analysis failed. Please try again.', 500);
 	}
 }

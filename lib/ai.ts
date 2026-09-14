@@ -4,6 +4,7 @@ import type { OsvVulnerability } from './osv';
 export const MAX_README_CHARS = 8_000;
 export const MAX_OUTPUT_TOKENS = 8192;
 export const MAX_VULNS_FOR_PROMPT = 45;
+export const GEMINI_TIMEOUT_MS = 90_000;
 
 export const BASE_SYSTEM_PROMPT = `You are an expert software engineer and repository inspector.
 Analyze the provided repository information and README content.

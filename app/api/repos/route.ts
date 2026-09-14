@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { githubUsernameSchema } from '@/lib/validation';
+import { createRateLimiter, getClientIp } from '@/lib/rate-limit';
+
+const reposRateLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
 
 interface IGitHubRepo {
 	id: number;
@@ -31,6 +34,14 @@ function getNextPageUrl(linkHeader: string | null): string | null {
 }
 
 export async function GET(request: NextRequest) {
+	const ipLimiter = reposRateLimiter.check(getClientIp(request));
+	if (!ipLimiter.ok) {
+		return NextResponse.json(
+			{ error: 'Too many requests. Try again in a moment.' },
+			{ status: 429 }
+		);
+	}
+
 	// get the username from the request
 	const usernameParam = request.nextUrl.searchParams.get('username');
 	if (!usernameParam) {
