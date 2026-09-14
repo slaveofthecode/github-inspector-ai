@@ -583,7 +583,7 @@
         <article class="card">
           <span class="card-tag">Insights</span>
           <h3>Top languages per repo</h3>
-          <p>The five most-used technologies of every repository, based on real byte usage from the GitHub API — each shown with its brand icon.</p>
+          <p>The five most-used technologies of every repository, based on real byte usage, pulled from a single GitHub GraphQL query — each shown with its brand icon.</p>
         </article>
 
         <article class="card">
@@ -632,7 +632,7 @@
         <li><strong>lucide-react</strong></li>
         <li><strong>simple-icons</strong></li>
         <li><strong>Zod</strong></li>
-        <li><strong>GitHub REST API</strong></li>
+        <li><strong>GitHub GraphQL API</strong></li>
         <li><strong>Vercel AI SDK</strong> + <strong>Gemini</strong></li>
         <li><strong>OSV.dev</strong> (vulnerability data)</li>
         <li><strong>Bun</strong></li>
@@ -654,7 +654,7 @@
         <div class="step">
           <span class="step-num" aria-hidden="true">2</span>
           <h3>Fetch from GitHub</h3>
-          <p>The server queries the GitHub API for public repositories and the top languages of each one.</p>
+          <p>The server runs a single GitHub GraphQL query (cursor pagination) that fetches all public repositories and the top languages of each one in one round-trip.</p>
         </div>
 
         <div class="step">
