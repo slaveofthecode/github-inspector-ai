@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -40,20 +40,26 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 		OsvVulnerability[] | null
 	>(null);
 	const [manifestsAnalyzed, setManifestsAnalyzed] = useState(0);
+	const [cachedUntil, setCachedUntil] = useState<string | null>(null);
+	const inFlightRef = useRef(false);
 
 	const handleAnalyze = async () => {
+		if (inFlightRef.current) return;
+
 		// Toggle accordion if analysis was already fetched
 		if (analysis && !loading) {
 			setIsOpen(!isOpen);
 			return;
 		}
 
+		inFlightRef.current = true;
 		setLoading(true);
 		setError(null);
 		setIsOpen(true);
 		setAnalysis('');
 		setVulnerabilities(null);
 		setManifestsAnalyzed(0);
+		setCachedUntil(null);
 
 		try {
 			const response = await fetch('/api/analyze', {
@@ -63,6 +69,9 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 				},
 				body: JSON.stringify({ owner, repo }),
 			});
+
+			const serverCachedUntil = response.headers.get('x-cache-until');
+			setCachedUntil(serverCachedUntil || null);
 
 			if (!response.ok) {
 				let message = 'Failed to analyze repository';
@@ -122,12 +131,14 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 				setAnalysis((prev) => prev + chunk);
 			}
 		} catch (err: unknown) {
+			setCachedUntil(null);
 			if (err instanceof Error) {
 				setError(err.message);
 			} else {
 				setError('An error occurred during AI analysis.');
 			}
 		} finally {
+			inFlightRef.current = false;
 			setLoading(false);
 		}
 	};
@@ -164,6 +175,16 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 					</span>
 				)}
 			</Button>
+
+			{cachedUntil && !loading && (
+				<p className="text-[11px] text-zinc-500 mt-1.5 ml-1">
+					Cached until{' '}
+					{new Date(cachedUntil).toLocaleTimeString([], {
+						hour: '2-digit',
+						minute: '2-digit',
+					})}
+				</p>
+			)}
 
 			{/* Analysis Output Container */}
 			{isOpen && (
@@ -227,8 +248,8 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 
 					{!error && !analysis && loading && (
 						<p className="text-zinc-500 italic text-center animate-pulse">
-							Generating insights and security explanations from the
-							repository...
+							Generating insights... This can take 1-2 minutes depending on
+							repository size.
 						</p>
 					)}
 

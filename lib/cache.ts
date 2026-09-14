@@ -9,14 +9,14 @@ export function createCache<T>({
 }: { ttlMs?: number; maxEntries?: number } = {}) {
 	const store = new Map<string, CacheEntry<T>>();
 
-	function get(key: string): T | null {
+	function get(key: string): { value: T; expiresAt: number } | null {
 		const entry = store.get(key);
 		if (!entry) return null;
 		if (Date.now() > entry.expiresAt) {
 			store.delete(key);
 			return null;
 		}
-		return entry.value;
+		return { value: entry.value, expiresAt: entry.expiresAt };
 	}
 
 	function set(key: string, value: T) {
