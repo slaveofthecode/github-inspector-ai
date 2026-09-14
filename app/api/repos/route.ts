@@ -3,158 +3,173 @@ import { githubUsernameSchema } from '@/lib/validation';
 import { createRateLimiter, getClientIp } from '@/lib/rate-limit';
 
 const reposRateLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
+const REPOS_PER_PAGE = 100;
+const MAX_PAGES = 100;
 
-interface IGitHubRepo {
-	id: number;
-	name: string;
-	description: string;
-	html_url: string;
-	stargazers_count: number;
-	forks_count: number;
-	created_at: string;
-	updated_at: string;
-	pushed_at: string;
-	languages_url: string;
-}
-
-function getNextPageUrl(linkHeader: string | null): string | null {
-	if (!linkHeader) return null;
-
-	for (const part of linkHeader.split(',')) {
-		const [urlPart, ...relParts] = part.split(';').map((s) => s.trim());
-		if (
-			relParts.some((rel) => rel.includes('rel="next"')) &&
-			urlPart?.startsWith('<') &&
-			urlPart.endsWith('>')
+const REPOS_QUERY = `query GetRepos($login: String!, $after: String) {
+	user(login: $login) {
+		repositories(
+			first: ${REPOS_PER_PAGE}
+			after: $after
+			orderBy: { field: CREATED_AT, direction: DESC }
+			ownerAffiliations: [OWNER, ORGANIZATION_MEMBER]
+			privacy: PUBLIC
 		) {
-			return urlPart.slice(1, -1);
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				databaseId
+				name
+				description
+				createdAt
+				pushedAt
+				url
+				languages(
+					first: 5
+					orderBy: { field: SIZE, direction: DESC }
+				) {
+					nodes {
+						name
+					}
+				}
+			}
 		}
 	}
-	return null;
+}`;
+
+interface GraphQLRepo {
+	databaseId: number;
+	name: string;
+	description: string | null;
+	createdAt: string;
+	pushedAt: string;
+	url: string;
+	languages: { nodes: { name: string }[] } | null;
+}
+
+interface GraphQLResponse {
+	data?: {
+		user?: {
+			repositories?: {
+				pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+				nodes?: GraphQLRepo[] | null;
+			} | null;
+		} | null;
+	};
+	errors?: { type?: string; message?: string }[];
+}
+
+function jsonError(error: string, status: number) {
+	return NextResponse.json({ error }, { status });
 }
 
 export async function GET(request: NextRequest) {
 	const ipLimiter = reposRateLimiter.check(getClientIp(request));
 	if (!ipLimiter.ok) {
-		return NextResponse.json(
-			{ error: 'Too many requests. Try again in a moment.' },
-			{ status: 429 }
-		);
+		return jsonError('Too many requests. Try again in a moment.', 429);
 	}
 
 	// get the username from the request
 	const usernameParam = request.nextUrl.searchParams.get('username');
 	if (!usernameParam) {
-		return NextResponse.json(
-			{ error: 'Username is required' },
-			{ status: 400 }
-		);
+		return jsonError('Username is required', 400);
 	}
 
 	const githubUsername = githubUsernameSchema.safeParse(usernameParam);
 	if (!githubUsername.success) {
-		return NextResponse.json(
-			{
-				error: 'Invalid GitHub username',
-			},
-			{
-				status: 400,
-			}
-		);
+		return jsonError('Invalid GitHub username', 400);
 	}
 	const username = githubUsername.data;
 
+	if (!process.env.GITHUB_TOKEN) {
+		return jsonError(
+			'GitHub API token is not configured on this server.',
+			503
+		);
+	}
+
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+		Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+	};
+
 	try {
-		// prepare the headers for the request
-		const headers = new Headers();
+		const allRepos: GraphQLRepo[] = [];
+		let after: string | null = null;
+		let pages = 0;
 
-		if (process.env.GITHUB_TOKEN) {
-			headers.set('Authorization', `Bearer ${process.env.GITHUB_TOKEN}`);
-		}
-		headers.set('Content-Type', 'application/json');
+		while (pages < MAX_PAGES) {
+			const response = await fetch('https://api.github.com/graphql', {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({
+					query: REPOS_QUERY,
+					variables: { login: username, after },
+				}),
+			});
 
-		// fetch ALL the repos from the GitHub API (paginated, up to 100 per page)
-		const allRepos: IGitHubRepo[] = [];
-		let pageUrl: string | null =
-			`https://api.github.com/users/${username}/repos?per_page=100`;
-
-		// safety net: GitHub lists at most 100 repos per page; cap total pages
-		let pagesFetched = 0;
-		while (pageUrl && pagesFetched < 100) {
-			const response = await fetch(pageUrl, { headers });
 			if (!response.ok) {
-				if (response.status === 404) {
-					return NextResponse.json(
-						{ error: 'GitHub user not found' },
-						{ status: 404 }
+				if (response.status === 401 || response.status === 403) {
+					return jsonError(
+						'GitHub API token is invalid or expired.',
+						503
 					);
 				}
-				return NextResponse.json(
-					{ error: 'Failed to fetch repos' },
-					{ status: response.status }
-				);
+				return jsonError('Failed to fetch repos', response.status);
 			}
 
-			const pageData: IGitHubRepo[] = await response.json();
-			allRepos.push(...pageData);
-			pageUrl = getNextPageUrl(response.headers.get('link'));
-			pagesFetched++;
+			const body: GraphQLResponse = await response.json();
+
+			if (!body.data?.user?.repositories?.nodes) {
+				const errors = body.errors ?? [];
+				if (
+					errors.some(
+						(e) =>
+							e.type === 'NOT_FOUND' ||
+							/Could not resolve to a User/.test(e.message ?? '')
+					)
+				) {
+					return jsonError('GitHub user not found', 404);
+				}
+				if (errors.some((e) => e.type === 'RATE_LIMITED')) {
+					return jsonError(
+						'GitHub API rate limit reached. Try again later.',
+						429
+					);
+				}
+				return jsonError('Failed to fetch repos', 502);
+			}
+
+			allRepos.push(...body.data.user.repositories.nodes);
+
+			if (!body.data.user.repositories.pageInfo?.hasNextPage) break;
+			after = body.data.user.repositories.pageInfo.endCursor ?? null;
+			pages++;
 		}
 
-		const reposData = allRepos;
-
-		// sort by created at descending
-		reposData.sort(
-			(a: IGitHubRepo, b: IGitHubRepo) =>
-				new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+		allRepos.sort(
+			(a, b) =>
+				new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
 		);
 
-		// 5. Fetch languages for each repository and extract the top 5
-		const reposWithLanguages = await Promise.all(
-			reposData.map(async (repo: IGitHubRepo) => {
-				let topLanguages: string[] = [];
-
-				try {
-					// Build clean URL directly using repo owner and name
-					const languagesApiUrl = `https://api.github.com/repos/${username}/${repo.name}/languages`;
-
-					const langResponse = await fetch(languagesApiUrl, { headers });
-
-					if (langResponse.ok) {
-						const languagesData = await langResponse.json();
-
-						// Ensure the response is a languages object and not an error response
-						if (languagesData && !languagesData.message) {
-							topLanguages = Object.keys(languagesData)
-								.sort((a, b) => languagesData[b] - languagesData[a])
-								.slice(0, 5);
-						}
-					}
-				} catch {
-					topLanguages = [];
-				}
-
-				return {
-					id: repo.id,
-					name: repo.name,
-					description: repo.description,
-					createdAt: repo.created_at,
-					pushedAt: repo.pushed_at,
-					languages: topLanguages,
-					htmlUrl: repo.html_url,
-				};
-			})
-		);
+		const repos = allRepos.map((repo) => ({
+			id: repo.databaseId,
+			name: repo.name,
+			description: repo.description,
+			createdAt: repo.createdAt,
+			pushedAt: repo.pushedAt,
+			languages: (repo.languages?.nodes ?? []).map((n) => n.name),
+			htmlUrl: repo.url,
+		}));
 
 		return NextResponse.json({
 			username,
-			total: reposWithLanguages.length,
-			repos: reposWithLanguages,
+			total: repos.length,
+			repos,
 		});
 	} catch {
-		return NextResponse.json(
-			{ error: 'Internal server error' },
-			{ status: 500 }
-		);
+		return jsonError('Internal server error', 500);
 	}
 }

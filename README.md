@@ -10,9 +10,9 @@ Inspect any GitHub user's public repositories, top technologies, and metadata fr
 ## Features
 
 - **Search by URL or username** — paste `https://github.com/user` or just `user`; the app extracts and validates the account for you.
-- **All public repositories, no caps** — the server-side route paginates through every page of the GitHub REST API, so accounts with 100+ repos are fully listed.
+- **All public repositories, no caps** — the server-side route queries GitHub's GraphQL API with cursor pagination, so accounts with 100+ repos are fully listed; repos and their top languages arrive in a single query (no per-repo round-trip).
 - **Sort by Created Date or Last Commit** — toggle the ordering right from the sticky results header.
-- **Top languages per repository with brand icons** — the 5 most-used technologies of every repo, based on byte usage from the GitHub API, rendered with brand icons.
+- **Top languages per repository with brand icons** — the 5 most-used technologies of every repo, based on byte usage, pulled directly from a single GitHub GraphQL query, rendered with brand icons.
 - **Key metadata at a glance** — creation date and last-commit date on every card.
 - **AI repository summaries** — click "Analyze Repository with AI" on any card to stream a structured markdown overview (purpose, key features, tech stack, code-health, and suggested improvements) generated live by Gemini from the repo's README.
 - **Deterministic vulnerability scan** — during analysis the app reads the repo's dependency manifests (`package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`, `Gemfile`) and checks them against OSV.dev, showing severity-ranked CVEs/GSHAs with their affected versions and aliases. No AI is involved in finding vulnerabilities, so results are factual.
@@ -57,9 +57,9 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### GitHub token (optional)
+### GitHub token (required for the repo listing)
 
-The app works without a token, but GitHub's anonymous limit is **60 requests/hour**. Add a [Personal Access Token](https://github.com/settings/tokens) to `.env.local` to raise it to **5,000 requests/hour**:
+The repo listing queries GitHub's **GraphQL** API, which requires authentication, so `GITHUB_TOKEN` is **required** for `GET /api/repos` to work. Without it the endpoint returns a clear `503 "not configured"` error instead of listing repos. Add a [Personal Access Token](https://github.com/settings/tokens) to `.env.local` (fine-grained, read-only, "Public repositories" permission is enough):
 
 ```
 GITHUB_TOKEN=github_pat_xxxxxxx
@@ -91,7 +91,7 @@ Without it, the app still shows the full repo listing; only the "Analyze with AI
 github-inspector-ai/
 ├── app/
 │   ├── api/analyze/route.ts # POST: streamed AI summary from README (cached + rate-limited)
-│   ├── api/repos/route.ts   # GET: calls GitHub REST API (paginated)
+│   ├── api/repos/route.ts   # GET: queries GitHub GraphQL (cursor pagination, repos + top 5 languages in one query; requires GITHUB_TOKEN)
 │   ├── api/health/route.ts  # GET: reports which env vars are configured
 │   ├── layout.tsx           # Root layout, fonts, metadata
 │   └── page.tsx             # Home page UI + search logic
@@ -102,7 +102,7 @@ github-inspector-ai/
 ├── lib/
 │   ├── ai.ts                # Gemini model instance + token/length caps
 │   ├── cache.ts             # In-memory TTL cache for analysis results
-│   ├── rate-limit.ts        # Per-IP rate limiter for /api/analyze
+│   ├── rate-limit.ts        # Per-IP rate limiter for /api/analyze and /api/repos
 │   ├── utils.ts             # Class-name utility
 │   └── validation.ts        # Zod schemas + URL/username parser
 ├── docs/                    # GitHub Pages landing page
@@ -112,16 +112,16 @@ github-inspector-ai/
 
 ## API
 
-The app exposes a single internal API route used by the frontend.
+The app exposes the following internal API routes used by the frontend.
 
 ### `GET /api/repos?username=<username>`
 
-Returns **all** public repositories for a GitHub user, sorted by creation date (newest first). The GitHub REST API is paginated server-side (up to 100 repos per page), so accounts with any number of public repos are fully covered.
+Returns **all** public repositories for a GitHub user, sorted by creation date (newest first). The route runs a single **GitHub GraphQL** query per page (up to 100 repos per page, cursor pagination) that also fetches each repo's top 5 languages in the same round-trip — so accounts with any number of public repos are fully covered with no per-repo requests. It requires `GITHUB_TOKEN` (GraphQL is not anonymous); the endpoint itself is rate-limited to **10 requests/min per IP**.
 
 ```json
 {
   "username": "slaveofthecode",
-  "total": 12,
+  "total": 47,
   "repos": [
     {
       "id": 123456789,
@@ -142,8 +142,9 @@ Returns **all** public repositories for a GitHub user, sorted by creation date (
 |---|---|
 | `400` | Missing or invalid `username` parameter |
 | `404` | GitHub user not found |
-| `429` | GitHub API rate limit reached (try again later) |
+| `429` | Too many requests for your IP, or GitHub rate limit reached |
 | `500` | Unexpected server error |
+| `503` | `GITHUB_TOKEN` not configured on the server (or invalid/expired) |
 
 ### `POST /api/analyze`
 
@@ -222,7 +223,7 @@ The scan currently covers the five most common manifests and only **pinned** (ex
 
 ## What's next
 
-- **Robustness & scale** — persist cache/rate-limits (Upstash/Redis) if traffic demands it, per-user repo limits, a strict Gemini timeout, lockfile-aware dependency resolution, and rate-limiting on `GET /api/repos`.
+- **Robustness & scale** — cache invalidation before the 6-hour TTL, lockfile-aware dependency resolution, and persisting cache/rate-limits (Upstash/Redis) if traffic demands it.
 
 ## Deployment
 
@@ -234,7 +235,7 @@ Set these environment variables in the Amplify console (App settings → Environ
 |---|---|---|
 | `GEMINI_API_KEY` | **Yes** | AI analysis. Create at https://aistudio.google.com |
 | `GEMINI_MODEL` | Yes* | Optional; defaults to `gemini-3.6-flash` in `lib/ai.ts` |
-| `GITHUB_TOKEN` | No | Recommended; raises GitHub API rate limit from 60 to 5,000 requests/hour |
+| `GITHUB_TOKEN` | **Yes** | Required for the repo listing (GitHub GraphQL; read-only perms are enough). Invalid/missing token → `GET /api/repos` returns `503` |
 
 \* `GEMINI_MODEL` is optional. After adding or changing env vars, **redeploy** (Amplify injects them at build/deploy time, not on save). Verify with `GET /api/health` — it reports whether the deployed server sees each variable.
 
