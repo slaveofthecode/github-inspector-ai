@@ -31,6 +31,7 @@ Inspect any GitHub user's public repositories, top technologies, and metadata fr
 | Icons | [simple-icons](https://simpleicons.org) (language badges) + [lucide-react](https://lucide.dev) (UI) |
 | Language | TypeScript |
 | Validation | [Zod](https://zod.dev) (client and server) |
+| Testing | [Vitest](https://vitest.dev) (unit + component + route-handler tests) + [Playwright](https://playwright.dev) (E2E) |
 | AI | [Vercel AI SDK](https://ai-sdk.dev) + Google [Gemini](https://ai.google.dev) (`@ai-sdk/google`) |
 | Vulnerability data | [OSV.dev](https://osv.dev) (deterministic, free, no key) via `lib/manifests.ts` + `lib/osv.ts` |
 | Package manager | [Bun](https://bun.sh) |
@@ -84,6 +85,10 @@ Without it, the app still shows the full repo listing; only the "Analyze with AI
 | `bun build` | Build the production bundle |
 | `bun start` | Start the production server |
 | `bun lint` | Run ESLint |
+| `bun test` | Run the test suite once (Vitest) |
+| `bun test:watch` | Run tests in watch mode (Vitest) |
+| `bun test:e2e` | Run end-to-end browser tests (Playwright) |
+| `bun test:ui` | Run E2E tests in Playwright UI mode (interactive, visible browser) |
 
 ## Project Structure
 
@@ -105,6 +110,13 @@ github-inspector-ai/
 │   ├── rate-limit.ts        # Per-IP rate limiter for /api/analyze and /api/repos
 │   ├── utils.ts             # Class-name utility
 │   └── validation.ts        # Zod schemas + URL/username parser
+├── test/
+│   └── setup.ts             # Vitest setup (jest-dom matchers)
+├── components/*.test.tsx    # Component tests (Testing Library + jsdom)
+├── app/api/*/route.test.ts  # Route-handler integration tests (Vitest)
+├── lib/*.test.ts            # Unit tests for lib modules (Vitest)
+├── e2e/                     # End-to-end browser tests (Playwright, mocked API routes)
+├── .github/workflows/ci.yml # GitHub Actions: lint + test + build + E2E on every PR/push
 ├── docs/                    # GitHub Pages landing page
 ├── public/                  # Static assets
 └── AGENTS.md                # Rules and conventions for AI coding agents
@@ -221,13 +233,41 @@ Example result for a repo with three pinned manifests (the JSON line streamed at
 
 The scan currently covers the five most common manifests and only **pinned** (exact) versions — ranges and lockfiles are not resolved yet, which is part of the robustness roadmap below.
 
+## Testing
+
+Four layers, run with [Vitest](https://vitest.dev) (under Bun) plus [Playwright](https://playwright.dev) for browser E2E:
+
+- **Unit tests** (`lib/*.test.ts`) — validation schemas, cache TTL/eviction, rate limiting, manifest parsers, OSV.dev scanning, and the Gemini prompt builder.
+- **Route-handler integration tests** (`app/api/*/route.test.ts`) — `GET /api/repos` and `POST /api/analyze` end-to-end with mocked GitHub GraphQL/REST, OSV.dev, and the AI stream: error codes, pagination, caching, deduplication, and rate limiting.
+- **Component tests** (`components/*.test.tsx`) — `LanguageBadge` (icon/color mapping and fallbacks) and `RepoAnalysis` (streaming markdown, vulnerability report, error and cached states) rendered in jsdom with Testing Library.
+- **End-to-end tests** (`e2e/*.spec.ts`) — Playwright against a real dev server with mocked API routes (so no live GitHub/Gemini calls): search flow, error/validation states, and the full analyze interaction.
+
+```bash
+bun run test         # unit + integration + component (Vitest) — runs once
+bun run test:watch   # Vitest — re-runs on every change
+bun run test:e2e     # Playwright E2E — headless, auto-starts the dev server
+bun run test:ui      # Playwright UI mode — interactive inspector with a live browser
+```
+
+No API keys or network calls are needed to run any of these — GitHub and Gemini are mocked at every layer, so the suite is deterministic and safe to run anywhere.
+
+Notes on the browser tests (Playwright):
+
+- Playwright starts the dev server for you (`bun run dev` on port 3000). If a server is already running there, it is **reused** instead of starting a second one.
+- First time, the browser binaries must be installed: `bunx playwright install chromium`.
+- `bun run test:ui` opens the Playwright inspector: pick a spec (e.g. `e2e/analyze.spec.ts`) and watch it run step by step in a visible Chromium window, with pause-and-inspect.
+- `bunx playwright test --headed` runs the whole E2E suite showing the browser window instead of headless.
+
+GitHub Actions runs `lint`, `test`, `build`, and the Playwright E2E suite on every pull request and push to `main` (`.github/workflows/ci.yml`).
+
 ## What's next
 
 - **Robustness & scale** — cache invalidation before the 6-hour TTL, lockfile-aware dependency resolution, and persisting cache/rate-limits (Upstash/Redis) if traffic demands it.
+- **UI & features** — in-repo search/filtering, per-repo star/fork/archive counts, and AI portfolio summaries.
 
 ## Deployment
 
-The project deploys to **AWS Amplify Hosting** (Free Tier — ~1000 build minutes/month, 5 GB storage, 15 GB transfer with Next.js SSR included), connected directly to your GitHub repository. Amplify auto-detects the Next.js SSR framework, deploys automatically on every push to `main` (no Dockerfile or CI pipeline to maintain), and provides HTTPS out of the box.
+The project deploys to **AWS Amplify Hosting** (Free Tier — ~1000 build minutes/month, 5 GB storage, 15 GB transfer with Next.js SSR included), connected directly to your GitHub repository. Amplify auto-detects the Next.js SSR framework, deploys automatically on every push to `main` (no Dockerfile or CI pipeline to maintain), and provides HTTPS out of the box. GitHub Actions additionally runs lint, unit/integration/component tests, a production build, and the Playwright E2E suite on every PR and push to `main` as a safety net.
 
 Set these environment variables in the Amplify console (App settings → Environment variables) for the **`main`** environment — without surrounding quotes:
 

@@ -520,6 +520,7 @@
         <li><a href="#stack">Tech Stack</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#security">Security</a></li>
+        <li><a href="#developers">Developers</a></li>
         <li><a href="#next">Upcoming</a></li>
         <li><a href="https://github.com/slaveofthecode/github-inspector-ai" target="_blank" rel="noopener noreferrer">Source</a></li>
       </ul>
@@ -632,6 +633,7 @@
         <li><strong>lucide-react</strong></li>
         <li><strong>simple-icons</strong></li>
         <li><strong>Zod</strong></li>
+        <li><strong>Vitest</strong> + <strong>Playwright</strong> (unit, component, route, E2E tests)</li>
         <li><strong>GitHub GraphQL API</strong></li>
         <li><strong>Vercel AI SDK</strong> + <strong>Gemini</strong></li>
         <li><strong>OSV.dev</strong> (vulnerability data)</li>
@@ -712,6 +714,25 @@
           <p>Minor impact, hard to trigger, or severity not published — still worth confirming.</p>
         </div>
       </div>
+    </section>
+
+  <!-- For developers -->
+    <section id="developers" class="container">
+      <h2 class="section-title">For developers</h2>
+      <p class="section-sub">Run the app and its test suite locally — no API keys needed.</p>
+
+      <ul class="stack-list" role="list">
+        <li><strong>bun run dev</strong> — start the app at <code>localhost:3000</code></li>
+        <li><strong>bun run test</strong> — unit, component &amp; route tests (Vitest)</li>
+        <li><strong>bun run test:e2e</strong> — headless browser E2E (Playwright)</li>
+        <li><strong>bun run test:ui</strong> — watch E2E tests in an interactive browser</li>
+      </ul>
+
+      <p class="lead" style="margin-top: 28px;">
+        Tests mock GitHub and Gemini at every layer, so they run anywhere without credentials.
+        Step-by-step guide:
+        <a href="https://github.com/slaveofthecode/github-inspector-ai#testing" target="_blank" rel="noopener noreferrer" style="color: var(--primary)">Testing — README</a>.
+      </p>
     </section>
 
   <!-- Upcoming -->
