@@ -22,6 +22,9 @@ function graphqlNode(id: number, name: string, createdAt: string, languages: str
 		description: `${name} desc`,
 		createdAt,
 		pushedAt: '2025-01-01T00:00:00Z',
+		stargazerCount: 12,
+		forkCount: 3,
+		isArchived: false,
 		url: `https://github.com/octocat/${name}`,
 		languages: { nodes: languages.map((name) => ({ name })) },
 	};
@@ -101,6 +104,9 @@ describe('GET /api/repos', () => {
 			description: 'newer desc',
 			createdAt: '2024-06-01T00:00:00Z',
 			pushedAt: '2025-01-01T00:00:00Z',
+			stargazerCount: 12,
+			forkCount: 3,
+			isArchived: false,
 			languages: ['TypeScript', 'CSS'],
 			htmlUrl: 'https://github.com/octocat/newer',
 		});
