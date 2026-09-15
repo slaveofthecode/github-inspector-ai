@@ -64,7 +64,11 @@ async function collectVulnerabilities(
 	owner: string,
 	repo: string,
 	ref: string
-): Promise<{ manifestsAnalyzed: number; vulnerabilities: OsvVulnerability[] }> {
+): Promise<{
+	manifestsAnalyzed: number;
+	dependenciesChecked: number;
+	vulnerabilities: OsvVulnerability[];
+}> {
 	const url = new URL(
 		`https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(
 			ref
@@ -73,7 +77,7 @@ async function collectVulnerabilities(
 	url.searchParams.set('recursive', '1');
 	const treeResponse = await fetch(url, { headers: githubHeaders() });
 	if (!treeResponse.ok) {
-		return { manifestsAnalyzed: 0, vulnerabilities: [] };
+		return { manifestsAnalyzed: 0, dependenciesChecked: 0, vulnerabilities: [] };
 	}
 	const treeData = await treeResponse.json();
 	const tree: { path?: string; type?: string; size?: number }[] = Array.isArray(
@@ -101,7 +105,11 @@ async function collectVulnerabilities(
 
 	const vulnerabilities =
 		digest.size > 0 ? await queryOsvDependencies([...digest.values()]) : [];
-	return { manifestsAnalyzed: analyzed, vulnerabilities };
+	return {
+		manifestsAnalyzed: analyzed,
+		dependenciesChecked: digest.size,
+		vulnerabilities,
+	};
 }
 
 function stringToStream(text: string): ReadableStream<string> {
@@ -219,6 +227,7 @@ export async function POST(request: NextRequest) {
 			: defaultBranch;
 		let vulnerabilitiesPayload: {
 			manifestsAnalyzed: number;
+			dependenciesChecked: number;
 			vulnerabilities: OsvVulnerability[];
 		};
 		try {
@@ -228,7 +237,11 @@ export async function POST(request: NextRequest) {
 				treeRef
 			);
 		} catch {
-			vulnerabilitiesPayload = { manifestsAnalyzed: 0, vulnerabilities: [] };
+			vulnerabilitiesPayload = {
+				manifestsAnalyzed: 0,
+				dependenciesChecked: 0,
+				vulnerabilities: [],
+			};
 		}
 		const metadataHeader = `${JSON.stringify({
 			type: 'vulns',

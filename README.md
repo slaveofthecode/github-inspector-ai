@@ -11,10 +11,16 @@ Inspect any GitHub user's public repositories, top technologies, and metadata fr
 
 - **Search by URL or username** — paste `https://github.com/user` or just `user`; the app extracts and validates the account for you.
 - **All public repositories, no caps** — the server-side route queries GitHub's GraphQL API with cursor pagination, so accounts with 100+ repos are fully listed; repos and their top languages arrive in a single query (no per-repo round-trip).
-- **Sort by Created Date or Last Commit** — toggle the ordering right from the sticky results header.
-- **Top languages per repository with brand icons** — the 5 most-used technologies of every repo, based on byte usage, pulled directly from a single GitHub GraphQL query, rendered with brand icons.
+- **Sort by Created Date or Last Commit** — toggle the ordering with a segmented control right from the sticky results header.
+- **In-repo search** — progressively filter the listed repos by **name** or **technology** from the sticky results header, with instant client-side results, a clear-button, and a dedicated no-match state.
+- **Cleaner results header** — a valid search clears the search input once at least one result loads; the header shows a clean "Total" reading and a borderless Created Date / Last Commit toggle.
+- **Star/fork counts and archived status** — every card shows compact star and fork counts (e.g. `1.2K`); archived repositories are dimmed with an "Archived" badge.
+- **Shareable result URLs** — the username and sort choice live in the query string (`?username=user&sort=updated`), so a result set can be bookmarked, shared, reloaded, and restored with the browser's back/forward buttons.
+- **Retry on transient errors and honest empty states** — rate-limit (429) and network failures show a one-click Retry button; accounts with no public repositories get a clear empty state instead of a blank page.
+- **Top technologies per repository with brand icons** — the 5 most-used technologies of every repo, based on byte usage, pulled directly from a single GitHub GraphQL query and rendered with brand icons.
 - **Key metadata at a glance** — creation date and last-commit date on every card.
-- **AI repository summaries** — click "Analyze Repository with AI" on any card to stream a structured markdown overview (purpose, key features, tech stack, code-health, and suggested improvements) generated live by Gemini from the repo's README.
+- **AI repository summaries** — click "Analyze Repository with AI" on any card to stream a structured markdown overview (purpose, key features, tech stack, code-health, and suggested improvements) generated live by Gemini from the repo's README, split into clickable sections (Security Findings opens first when present).
+- **GitHub-style severity distribution** — the vulnerability report opens with a color-coded severity bar and legend (Critical → Unknown, GitHub-conventional colors) plus a Details toggle that lists every finding.
 - **Deterministic vulnerability scan** — during analysis the app reads the repo's dependency manifests (`package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`, `Gemfile`) and checks them against OSV.dev, showing severity-ranked CVEs/GSHAs with their affected versions and aliases. No AI is involved in finding vulnerabilities, so results are factual.
 - **AI vulnerability explanations** — Gemini explains and prioritizes each deterministic finding in plain language (what the flaw is, why it matters for that repo, and the fix), while OSV.dev stays the only source of CVEs — the AI never invents a vulnerability.
 - **Direct links** — each repository opens on GitHub in a new tab; the `@username` in the results header links to the user's GitHub profile.
@@ -102,7 +108,7 @@ github-inspector-ai/
 │   └── page.tsx             # Home page UI + search logic
 ├── components/
 │   ├── language-badge.tsx   # Language labels with brand icons
-│   ├── repo-analysis.tsx    # "Analyze with AI" button + streaming markdown panel
+│   ├── repo-analysis.tsx    # "Analyze with AI" button + streaming markdown, severity bar, section tabs
 │   └── ui/                  # shadcn/ui components (button, card, badge, ...)
 ├── lib/
 │   ├── ai.ts                # Gemini model instance + token/length caps
@@ -136,17 +142,22 @@ Returns **all** public repositories for a GitHub user, sorted by creation date (
   "total": 47,
   "repos": [
     {
-      "id": 123456789,
+"id": 123456789,
       "name": "my-project",
       "description": "A short description of the repo.",
       "createdAt": "2024-01-15T10:00:00Z",
       "pushedAt": "2025-06-01T18:30:00Z",
+      "stargazerCount": 1200,
+      "forkCount": 45,
+      "isArchived": false,
       "languages": ["TypeScript", "CSS", "JavaScript"],
       "htmlUrl": "https://github.com/slaveofthecode/my-project"
     }
   ]
 }
 ```
+
+Each repo also reports its **star count, fork count, and archived status** (`stargazerCount`, `forkCount`, `isArchived`) so the frontend can render the badges and dimmed archived cards without extra requests.
 
 ### Errors
 
@@ -174,10 +185,10 @@ Request body:
 The response starts with a single JSON line (the vulnerability report):
 
 ```json
-{"type":"vulns","manifestsAnalyzed":1,"vulnerabilities":[{ "id": "GHSA-xxx", "aliases": ["CVE-..."], "severity": "HIGH", "score": 7.5, "summary": "...", "affectedPackage": "lodash", "affectedVersions": [">=4.0.0 <4.17.21"] }]}
+{"type":"vulns","manifestsAnalyzed":1,"dependenciesChecked":27,"vulnerabilities":[{ "id": "GHSA-xxx", "aliases": ["CVE-..."], "severity": "HIGH", "score": 7.5, "summary": "...", "affectedPackage": "lodash", "affectedVersions": [">=4.0.0 <4.17.21"] }]}
 ```
 
-followed by the streamed markdown narrative. `manifestsAnalyzed` is the number of manifests found and parsed; `vulnerabilities` is empty when none are found or the repo declares no manifests. Results are cached for 6 hours per `owner/repo@commit`, and the endpoint is rate-limited to **10 requests/min per IP** (protects both GitHub's API and your Gemini quota):
+followed by the streamed markdown narrative. `manifestsAnalyzed` is the number of manifests found and parsed; `dependenciesChecked` is how many pinned dependencies were resolved from them for the OSV query; `vulnerabilities` is empty when none are found. The UI distinguishes three cases: no supported manifests, manifests with no declarable dependencies, and a clean result with the actual dependency count. Results are cached for 6 hours per `owner/repo@commit`, and the endpoint is rate-limited to **10 requests/min per IP** (protects both GitHub's API and your Gemini quota):
 
 | Status | Description |
 |---|---|
@@ -225,7 +236,7 @@ The report uses a few terms worth knowing:
 Example result for a repo with three pinned manifests (the JSON line streamed at the start of a `POST /api/analyze` response):
 
 ```json
-{"type":"vulns","manifestsAnalyzed":3,"vulnerabilities":[
+{"type":"vulns","manifestsAnalyzed":3,"dependenciesChecked":42,"vulnerabilities":[
   {"id":"GHSA-fjxv-7rqg-78g4","aliases":["CVE-2025-7783"],"severity":"CRITICAL","score":9.8,"summary":"form-data vulnerable to prototype pollution in mime type parsing","affectedPackage":"form-data","affectedVersions":[">=0 <2.5.4"]},
   {"id":"GHSA-hrpp-h998-j3pp","aliases":["CVE-2022-24999"],"severity":"HIGH","score":7.5,"summary":"qs vulnerable to prototype pollution when using plain objects","affectedPackage":"qs","affectedVersions":[">=6.10.0 <6.10.3"]}
 ]}
@@ -263,7 +274,7 @@ GitHub Actions runs `lint`, `test`, `build`, and the Playwright E2E suite on eve
 ## What's next
 
 - **Robustness & scale** — cache invalidation before the 6-hour TTL, lockfile-aware dependency resolution, and persisting cache/rate-limits (Upstash/Redis) if traffic demands it.
-- **UI & features** — in-repo search/filtering, per-repo star/fork/archive counts, and AI portfolio summaries.
+- **UI & features** — AI portfolio summaries, per-repo navigation straight into each repository, and lightweight charting of activity over time.
 
 ## Deployment
 

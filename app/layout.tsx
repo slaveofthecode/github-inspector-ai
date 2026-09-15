@@ -28,12 +28,14 @@ export const metadata: Metadata = {
 		type: 'website',
 		locale: 'en_US',
 		url: siteUrl,
+		images: [{ url: `${siteUrl}/og-image.png`, width: 1200, height: 630, alt: 'GitHub Inspector' }],
 	},
 	twitter: {
 		card: 'summary_large_image',
 		title: 'GitHub Inspector',
 		description:
 			"Inspect any GitHub user's public repositories, top languages, and metadata in a clean, fast interface.",
+		images: [`${siteUrl}/og-image.png`],
 	},
 };
 

@@ -430,23 +430,23 @@
     }
 
     .sev-critical {
-      background: linear-gradient(135deg, #ef4444, #b91c1c);
-      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+      background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+      box-shadow: 0 4px 14px rgba(185, 28, 28, 0.35);
     }
 
     .sev-high {
-      background: linear-gradient(135deg, #f97316, #b45309);
-      box-shadow: 0 4px 14px rgba(249, 115, 22, 0.35);
+      background: linear-gradient(135deg, #f0883e, #b45309);
+      box-shadow: 0 4px 14px rgba(240, 136, 62, 0.35);
     }
 
     .sev-medium {
-      background: linear-gradient(135deg, #eab308, #a16207);
-      box-shadow: 0 4px 14px rgba(234, 179, 8, 0.35);
+      background: linear-gradient(135deg, #d4a72c, #a16207);
+      box-shadow: 0 4px 14px rgba(212, 167, 44, 0.35);
     }
 
     .sev-low {
-      background: linear-gradient(135deg, #22c55e, #15803d);
-      box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);
+      background: linear-gradient(135deg, #22d3ee, #0e7490);
+      box-shadow: 0 4px 14px rgba(34, 211, 238, 0.35);
     }
 
     /* ---- Footer ---- */
@@ -589,14 +589,26 @@
 
         <article class="card">
           <span class="card-tag">Metadata</span>
-          <h3>Key dates at a glance</h3>
-          <p>Creation and last-commit dates on every card, with a sort toggle for either ordering right in the results header.</p>
+          <h3>Key metadata at a glance</h3>
+          <p>Creation and last-commit dates on every card, plus compact star and fork counts (e.g. <code>1.2K</code>) and dimmed "Archived" badges for frozen repositories.</p>
+        </article>
+
+        <article class="card">
+          <span class="card-tag">Search</span>
+          <h3>In-account search</h3>
+          <p>Progressive client-side filtering by repository name or technology, right in the sticky results header — with a clear button and an explicit no-match state.</p>
+        </article>
+
+        <article class="card">
+          <span class="card-tag">Sharing</span>
+          <h3>Shareable result URLs</h3>
+          <p>Your search and sort live in the URL (<code>?username=user&amp;sort=updated</code>), so a result set can be bookmarked, shared, and restored with back/forward navigation.</p>
         </article>
 
         <article class="card">
           <span class="card-tag">AI</span>
           <h3>Instant AI repository summaries</h3>
-          <p>Click "Analyze" on any repository to stream a structured overview — purpose, key features, tech stack, health, and suggested improvements — generated live by Gemini from the repo's README.</p>
+          <p>Click "Analyze" on any repository to stream a structured overview — purpose, key features, tech stack, health, and suggested improvements — generated live by Gemini from the repo's README, split into clickable sections (Security Findings opens first) above a GitHub-style severity bar.</p>
         </article>
 
         <article class="card">
@@ -744,7 +756,7 @@
         <article class="card">
           <span class="card-tag">Live now</span>
           <h3>Repository insights</h3>
-          <p>Search any GitHub user and instantly see all their public repositories, top technologies, and key dates — fully working today.</p>
+          <p>Search any GitHub user and instantly see all their public repositories, top technologies, key dates, and star/fork counts — filter results by name or technology, and share any result set via its URL. Fully working today.</p>
         </article>
 
         <article class="card">

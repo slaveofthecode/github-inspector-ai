@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import type { OsvVulnerability } from '@/lib/osv';
+import type { OsvVulnerability, VulnSeverity } from '@/lib/osv';
 
 interface RepoAnalysisProps {
 	owner: string;
@@ -15,8 +15,18 @@ const SEVERITY_STYLES: Record<string, string> = {
 	CRITICAL: 'bg-red-500/15 text-red-400 border-red-500/40',
 	HIGH: 'bg-orange-500/15 text-orange-400 border-orange-500/40',
 	MEDIUM: 'bg-amber-500/15 text-amber-400 border-amber-500/40',
-	LOW: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/40',
+	LOW: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/40',
 	UNKNOWN: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/40',
+};
+
+// GitHub-conventional severity palette for the distribution bar + legend.
+const SEVERITY_ORDER: VulnSeverity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
+const SEVERITY_META: Record<VulnSeverity, { label: string; color: string }> = {
+	CRITICAL: { label: 'Critical', color: '#b91c1c' },
+	HIGH: { label: 'High', color: '#f0883e' },
+	MEDIUM: { label: 'Medium', color: '#d4a72c' },
+	LOW: { label: 'Low', color: '#22d3ee' },
+	UNKNOWN: { label: 'Unknown', color: '#8250df' },
 };
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -31,6 +41,38 @@ function SeverityBadge({ severity }: { severity: string }) {
 	);
 }
 
+export interface MarkdownSection {
+	heading: string;
+	body: string;
+}
+
+export function parseSections(md: string): MarkdownSection[] {
+	const lines = md.split(/\r?\n/);
+	const sections: MarkdownSection[] = [];
+	const lead: string[] = [];
+	let current: MarkdownSection | null = null;
+
+	for (const line of lines) {
+		const match = line.match(/^(#{1,4})\s+(.+)$/);
+		if (match) {
+			// Strip markdown emphasis (e.g. "## **Tech Stack**") from the tab label.
+			const heading = match[2].replace(/\*+/g, '').trim();
+			current = { heading, body: '' };
+			sections.push(current);
+		} else if (current) {
+			current.body += `${line}\n`;
+		} else {
+			lead.push(line);
+		}
+	}
+
+	if (sections.length > 0 && lead.length > 0 && sections[0]) {
+		sections[0].body = `${lead.join('\n')}\n${sections[0].body}`;
+	}
+
+	return sections;
+}
+
 export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 	const [analysis, setAnalysis] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -40,8 +82,50 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 		OsvVulnerability[] | null
 	>(null);
 	const [manifestsAnalyzed, setManifestsAnalyzed] = useState(0);
+	const [dependenciesChecked, setDependenciesChecked] = useState(0);
 	const [cachedUntil, setCachedUntil] = useState<string | null>(null);
+	const [showDetails, setShowDetails] = useState(false);
+	const [selectedIndex, setSelectedIndex] = useState(0);
+	const [userPinned, setUserPinned] = useState(false);
 	const inFlightRef = useRef(false);
+
+	const severityCounts = useMemo(() => {
+		const counts: Record<VulnSeverity, number> = {
+			CRITICAL: 0,
+			HIGH: 0,
+			MEDIUM: 0,
+			LOW: 0,
+			UNKNOWN: 0,
+		};
+		for (const vuln of vulnerabilities ?? []) {
+			counts[vuln.severity] = (counts[vuln.severity] ?? 0) + 1;
+		}
+		return counts;
+	}, [vulnerabilities]);
+
+	const sections = useMemo(() => {
+		const parsed = parseSections(analysis);
+		// Pin "Security Findings" as the first tab so it reads immediately after the severity bar.
+		const secIdx = parsed.findIndex((s) => /security findings/i.test(s.heading));
+		if (secIdx > 0) {
+			const [security] = parsed.splice(secIdx, 1);
+			parsed.unshift(security);
+		}
+		return parsed;
+	}, [analysis]);
+	const hasSections = sections.length > 0;
+
+	const defaultIndex = useMemo(() => {
+		const secIdx = sections.findIndex((s) => /security findings/i.test(s.heading));
+		return secIdx >= 0 ? secIdx : 0;
+	}, [sections]);
+	const activeIndex = userPinned ? selectedIndex : defaultIndex;
+
+	const severityAriaLabel = SEVERITY_ORDER.filter(
+		(sev) => severityCounts[sev] > 0
+	)
+		.map((sev) => `${SEVERITY_META[sev].label}: ${severityCounts[sev]}`)
+		.join(', ');
 
 	const handleAnalyze = async () => {
 		if (inFlightRef.current) return;
@@ -59,7 +143,11 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 		setAnalysis('');
 		setVulnerabilities(null);
 		setManifestsAnalyzed(0);
+		setDependenciesChecked(0);
 		setCachedUntil(null);
+		setShowDetails(false);
+		setSelectedIndex(0);
+		setUserPinned(false);
 
 		try {
 			const response = await fetch('/api/analyze', {
@@ -109,9 +197,11 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 						try {
 							const meta = JSON.parse(rawMeta) as {
 								manifestsAnalyzed?: number;
+								dependenciesChecked?: number;
 								vulnerabilities?: OsvVulnerability[];
 							};
 							setManifestsAnalyzed(meta.manifestsAnalyzed ?? 0);
+							setDependenciesChecked(meta.dependenciesChecked ?? 0);
 							setVulnerabilities(
 								Array.isArray(meta.vulnerabilities)
 									? meta.vulnerabilities
@@ -193,55 +283,126 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 						<p className="text-red-400 text-center font-mono">{error}</p>
 					)}
 
-					{!error && vulnerabilities !== null && manifestsAnalyzed > 0 && (
+					{!error && vulnerabilities !== null && (
 						<div className="space-y-2 border-b border-zinc-800 pb-3">
-							<p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-								Vulnerabilities ({vulnerabilities.length})
-							</p>
-							{vulnerabilities.length === 0 ? (
-								<p className="text-xs text-emerald-400/90">
-									No known vulnerabilities found in declared dependencies.
+							<div className="flex items-center justify-between gap-2">
+								<p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+									Vulnerabilities ({vulnerabilities.length})
 								</p>
-							) : (
-								<ul className="space-y-2">
-									{vulnerabilities.map((vuln) => (
-										<li
-											key={vuln.id}
-											className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
-										>
-											<div className="flex items-center gap-2">
-												<SeverityBadge severity={vuln.severity} />
-												<span className="font-mono text-[11px] text-zinc-200">
-													{vuln.id}
+								{vulnerabilities.length > 0 && (
+									<button
+										type="button"
+										onClick={() => setShowDetails((v) => !v)}
+										aria-expanded={showDetails}
+										className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+									>
+										{showDetails ? (
+											<>
+												Hide Details <ChevronUp className="h-3 w-3" />
+											</>
+										) : (
+											<>
+												Details <ChevronDown className="h-3 w-3" />
+											</>
+										)}
+									</button>
+								)}
+							</div>
+
+							{vulnerabilities.length > 0 ? (
+								<div className="space-y-2">
+									{/* Severity distribution bar (GitHub-conventional colors) */}
+									<div
+										className="flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-800/60"
+										role="img"
+										aria-label={`Severity distribution: ${severityAriaLabel}`}
+									>
+										{SEVERITY_ORDER.map((sev) =>
+											severityCounts[sev] > 0 ? (
+												<div
+													key={sev}
+													className="h-full first:rounded-l-full last:rounded-r-full"
+													style={{
+														width: `${(severityCounts[sev] / vulnerabilities.length) * 100}%`,
+														backgroundColor: SEVERITY_META[sev].color,
+													}}
+													title={`${SEVERITY_META[sev].label}: ${severityCounts[sev]}`}
+												/>
+											) : null
+										)}
+									</div>
+
+									{/* Legend */}
+									<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+										{SEVERITY_ORDER.map((sev) =>
+											severityCounts[sev] > 0 ? (
+												<span
+													key={sev}
+													className="inline-flex items-center gap-1 text-[11px]"
+													style={{ color: SEVERITY_META[sev].color }}
+												>
+													<span
+														className="h-1.5 w-1.5 rounded-full"
+														style={{
+															backgroundColor: SEVERITY_META[sev].color,
+														}}
+													/>
+													{SEVERITY_META[sev].label} ({severityCounts[sev]})
 												</span>
-											</div>
-											{vuln.aliases.length > 0 && (
-												<p className="mt-1 text-[11px] text-zinc-400">
-													{vuln.aliases.join(', ')}
-												</p>
-											)}
-											{vuln.affectedPackage !== null && (
-												<p className="mt-1 text-[11px] text-zinc-400">
-													<span className="text-zinc-300">
-														{vuln.affectedPackage}
-													</span>
-													{vuln.affectedVersions.length > 0 && (
-														<>
-															{' '}
-															— affected:{' '}
-															{vuln.affectedVersions.join(', ')}
-														</>
+											) : null
+										)}
+									</div>
+
+									{showDetails && (
+										<ul className="space-y-2 pt-1">
+											{vulnerabilities.map((vuln) => (
+												<li
+													key={vuln.id}
+													className="rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5"
+												>
+													<div className="flex items-center gap-2">
+														<SeverityBadge severity={vuln.severity} />
+														<span className="font-mono text-[11px] text-zinc-200">
+															{vuln.id}
+														</span>
+													</div>
+													{vuln.aliases.length > 0 && (
+														<p className="mt-1 text-[11px] text-zinc-400">
+															{vuln.aliases.join(', ')}
+														</p>
 													)}
-												</p>
-											)}
-											{vuln.summary !== null && (
-												<p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
-													{vuln.summary}
-												</p>
-											)}
-										</li>
-									))}
-								</ul>
+													{vuln.affectedPackage !== null && (
+														<p className="mt-1 text-[11px] text-zinc-400">
+															<span className="text-zinc-300">
+																{vuln.affectedPackage}
+															</span>
+															{vuln.affectedVersions.length > 0 && (
+																<>
+																	{' '}
+																	— affected:{' '}
+																	{vuln.affectedVersions.join(', ')}
+																</>
+															)}
+														</p>
+													)}
+													{vuln.summary !== null && (
+														<p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+															{vuln.summary}
+														</p>
+													)}
+												</li>
+											))}
+										</ul>
+									)}
+								</div>
+							) : (
+								<p className="text-xs text-emerald-400/90">
+									{manifestsAnalyzed === 0
+										? 'No supported dependency manifests were detected in this repository.'
+										: dependenciesChecked === 0
+											? 'Dependency manifests were detected, but no declarable dependencies were found.'
+											: `Checked ${dependenciesChecked} dependencies — no known vulnerabilities found in declared dependencies.`}
+								</p>
 							)}
 						</div>
 					)}
@@ -261,9 +422,46 @@ export function RepoAnalysis({ owner, repo }: RepoAnalysisProps) {
 										AI analysis &amp; security explanations
 									</p>
 								)}
-							<div className="prose prose-invert prose-xs max-w-none space-y-2">
-								<ReactMarkdown>{analysis}</ReactMarkdown>
-							</div>
+							{hasSections ? (
+								<>
+									<div
+										className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-2 max-h-40 overflow-y-auto"
+										role="tablist"
+										aria-label="AI analysis sections"
+									>
+										{sections.map((section, i) => (
+											<button
+												key={`${section.heading}-${i}`}
+												type="button"
+												role="tab"
+												aria-selected={activeIndex === i}
+												onClick={() => {
+													setSelectedIndex(i);
+													setUserPinned(true);
+												}}
+												className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+													activeIndex === i
+														? 'bg-indigo-600 text-white shadow-sm'
+														: 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+												}`}
+											>
+												{section.heading}
+											</button>
+										))}
+									</div>
+									<div key={activeIndex} className="animate-rise">
+										<div className="prose prose-invert prose-xs max-w-none space-y-2">
+											<ReactMarkdown>
+												{`## ${sections[activeIndex].heading}\n\n${sections[activeIndex].body}`}
+											</ReactMarkdown>
+										</div>
+									</div>
+								</>
+							) : (
+								<div className="prose prose-invert prose-xs max-w-none space-y-2">
+									<ReactMarkdown>{analysis}</ReactMarkdown>
+								</div>
+							)}
 						</div>
 					)}
 				</div>

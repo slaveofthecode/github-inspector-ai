@@ -25,6 +25,9 @@ const REPOS_QUERY = `query GetRepos($login: String!, $after: String) {
 				description
 				createdAt
 				pushedAt
+				stargazerCount
+				forkCount
+				isArchived
 				url
 				languages(
 					first: 5
@@ -45,6 +48,9 @@ interface GraphQLRepo {
 	description: string | null;
 	createdAt: string;
 	pushedAt: string;
+	stargazerCount: number;
+	forkCount: number;
+	isArchived: boolean;
 	url: string;
 	languages: { nodes: { name: string }[] } | null;
 }
@@ -160,6 +166,9 @@ export async function GET(request: NextRequest) {
 			description: repo.description,
 			createdAt: repo.createdAt,
 			pushedAt: repo.pushedAt,
+			stargazerCount: repo.stargazerCount,
+			forkCount: repo.forkCount,
+			isArchived: repo.isArchived,
 			languages: (repo.languages?.nodes ?? []).map((n) => n.name),
 			htmlUrl: repo.url,
 		}));

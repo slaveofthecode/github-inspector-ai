@@ -10,6 +10,9 @@ const REPOS_FIXTURE = {
 			description: 'A repo with a vulnerability',
 			createdAt: '2024-01-15T10:00:00Z',
 			pushedAt: '2025-06-01T18:30:00Z',
+			stargazerCount: 1200,
+			forkCount: 45,
+			isArchived: false,
 			languages: ['TypeScript'],
 			htmlUrl: 'https://github.com/octocat/hello-world',
 		},
@@ -37,7 +40,7 @@ async function openRepo(page: Page) {
 	await expect(page.getByRole('link', { name: 'hello-world' })).toBeVisible();
 }
 
-test('analyze streams a summary and renders the vulnerability report', async ({ page }) => {
+test('analyze shows the severity bar and renders the vulnerability report in Details', async ({ page }) => {
 	await mockAnalyze(
 		page,
 		`${VULNS_META}## Analysis\n\nThe repository is small and well maintained.\n`,
@@ -49,9 +52,15 @@ test('analyze streams a summary and renders the vulnerability report', async ({ 
 	await page.getByText('Analyze Repository with AI').click();
 
 	await expect(page.getByText('Vulnerabilities (1)')).toBeVisible();
+	await expect(page.getByText('Critical (1)')).toBeVisible();
+	await expect(page.getByRole('img', { name: /Critical: 1/ })).toBeVisible();
+	await expect(page.getByText('GHSA-123')).not.toBeVisible();
+
+	await page.getByText('Details').click();
 	await expect(page.getByText('GHSA-123')).toBeVisible();
 	await expect(page.getByText('CVE-2025-1234')).toBeVisible();
 	await expect(page.getByText('lodash')).toBeVisible();
+
 	await expect(page.getByRole('heading', { name: 'Analysis' })).toBeVisible();
 	await expect(page.getByText('AI Analysis Summary')).toBeVisible();
 });
